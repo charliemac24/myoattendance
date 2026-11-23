@@ -29,7 +29,7 @@ export function LoginPage({ onAuthenticated }) {
 }
 
 export function RegisterPage({ onAuthenticated }) {
-    const [values, setValues] = useState({ name: '', organization_name: '', organization_type: 'company', email: '', password: '', password_confirmation: '' }); const [error, setError] = useState(null);
+    const [values, setValues] = useState({ name: '', organization_name: '', organization_type: 'school', email: '', password: '', password_confirmation: '' }); const [error, setError] = useState(null);
     const set = (name) => (value) => setValues((old) => ({ ...old, [name]: value }));
     const submit = async (event) => { event.preventDefault(); setError(null); try { const result = await register(values); onAuthenticated(result.user); } catch (caught) { setError(caught); } };
     return h(Form, { title: 'Create account', onSubmit: submit, submitLabel: 'Create account', error, footer: [link('Already have an account', '/login')] },

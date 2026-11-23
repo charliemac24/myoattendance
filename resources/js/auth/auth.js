@@ -3,9 +3,7 @@ import { del, get, patch, post, put, upload } from '../services/api';
 // Sign-up choices. Keep in step with OrganizationTypes::selectableLabels() (hidden types are left out).
 export const organizationTypes = [
     ['school', 'School / Education'],
-    ['company', 'Company'],
     ['fitness', 'Fitness / Gym'],
-    ['other', 'Other'],
 ];
 
 export const currentUser = async () => {

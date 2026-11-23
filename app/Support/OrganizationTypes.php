@@ -16,11 +16,12 @@ final class OrganizationTypes
     public const OPEN_HOURS_BY_DEFAULT = ['fitness'];
 
     /**
-     * Types not offered in the industry dropdowns. Construction, Warehouse and Staffing behave exactly like Company;
+     * Types not offered in the industry dropdowns. Company and Other are paused while the focus is School and Fitness / Gym.
+     * Construction, Warehouse and Staffing behave exactly like Company;
      * Training Center needs dated courses, and Sports Academy needs athletes in several teams, which are not supported.
      * Organizations already on one keep it.
      */
-    public const HIDDEN = ['construction', 'warehouse', 'staffing', 'training_center', 'sports_academy'];
+    public const HIDDEN = ['company', 'construction', 'warehouse', 'staffing', 'training_center', 'sports_academy', 'other'];
 
     public const LABELS = [
         'school' => 'School / Education',

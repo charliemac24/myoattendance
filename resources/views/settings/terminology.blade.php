@@ -92,6 +92,11 @@
                     subgroup_plural: document.getElementById('tm-subgroup-plural'),
                 };
 
+                // The menu was drawn with the old labels, so redraw the page once the new ones are saved.
+                function refreshMenu() {
+                    setTimeout(() => window.location.reload(), 900);
+                }
+
                 function clearMessages() {
                     errorBox.classList.remove('visible');
                     successBox.classList.remove('visible');
@@ -115,6 +120,7 @@
                         applyTerminology(result.terminology);
                         successBox.textContent = 'Labels saved.';
                         successBox.classList.add('visible');
+                        refreshMenu();
                     } catch (error) {
                         errorBox.textContent = window.MyoAuth.firstErrorMessage(error);
                         errorBox.classList.add('visible');
@@ -140,6 +146,7 @@
                         applyTerminology(result.terminology);
                         successBox.textContent = `Switched to ${label}.`;
                         successBox.classList.add('visible');
+                        refreshMenu();
                     } catch (error) {
                         industry.value = currentIndustry;
                         errorBox.textContent = window.MyoAuth.firstErrorMessage(error);
@@ -173,6 +180,7 @@
                         applyTerminology(payload.terminology);
                         successBox.textContent = 'Default labels restored.';
                         successBox.classList.add('visible');
+                        refreshMenu();
                     } catch (error) {
                         errorBox.textContent = 'Unable to reach the server. Please check your connection and try again.';
                         errorBox.classList.add('visible');

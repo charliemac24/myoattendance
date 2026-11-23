@@ -24,7 +24,9 @@ class OrganizationTerminologyController extends Controller
         ]);
         $data = array_map(static fn (string $value): string => trim($value), $data);
         $organization = $request->user()->organization;
-        $organization->update(['terminology' => $data]);
+        // Keep only the labels that differ from the industry's own words, so the rest follow the industry when it changes.
+        $custom = array_diff_assoc($data, OrganizationTerminology::defaults($organization->type));
+        $organization->update(['terminology' => $custom === [] ? null : $custom]);
 
         return response()->json(['terminology' => OrganizationTerminology::forOrganization($organization->fresh())]);
     }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\OrganizationTerminology;
 use App\Support\OrganizationTypes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,5 +37,26 @@ class IndustryChoicesTest extends TestCase
         $this->assertArrayHasKey('company', OrganizationTypes::selectableLabels('company'));
         $this->actingAs($owner)->get('/settings/terminology')->assertOk()->assertSee('Company');
         $this->assertSame('company', $organization->fresh()->type);
+    }
+
+    public function test_labels_follow_the_industry_when_it_changes_and_only_real_custom_labels_are_kept(): void
+    {
+        $organization = Organization::create(['name' => 'Switcher', 'type' => 'school', 'timezone' => 'Asia/Manila']);
+        $owner = User::create(['organization_id' => $organization->id, 'name' => 'Owner', 'email' => 'owner@switch.test', 'password' => 'password', 'email_verified_at' => now(), 'role' => 'owner']);
+
+        // Saving the form untouched must not freeze the school words.
+        $this->actingAs($owner)->putJson('/api/organization/terminology', OrganizationTerminology::defaults('school'))->assertOk();
+        $this->assertNull($organization->fresh()->terminology);
+
+        $this->actingAs($owner)->putJson('/api/organization/industry', ['type' => 'fitness'])->assertOk();
+        $this->actingAs($owner)->get('/people')->assertOk()->assertSee('Members')->assertDontSee('Students');
+        $this->actingAs($owner)->get('/groups')->assertOk()->assertSee('Plans')->assertDontSee('Grade Levels');
+        $this->actingAs($owner)->get('/subgroups')->assertOk()->assertSee('Classes')->assertDontSee('Sections');
+
+        // A real custom label is kept, the rest still follow the industry.
+        $words = OrganizationTerminology::defaults('fitness');
+        $words['person_plural'] = 'Clients';
+        $this->actingAs($owner)->putJson('/api/organization/terminology', $words)->assertOk();
+        $this->assertSame(['person_plural' => 'Clients'], $organization->fresh()->terminology);
     }
 }

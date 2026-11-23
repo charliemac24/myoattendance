@@ -92,7 +92,7 @@ class OpenHoursAndMembershipTest extends TestCase
         $student = $this->person($organization, $classes, 'K1', 'Kim', '2026-11-01');
 
         $this->scanAt($user, $expired, '2026-11-09 07:00')->assertJsonPath('code', 'MEMBERSHIP_EXPIRED')->assertJsonPath('message', 'Membership expired on Nov 8, 2026.');
-        $this->assertSame(0, AttendanceEvent::where('person_id', $expired->id)->count());
+        $this->assertSame(0, AttendanceEvent::where('person_id', $expired->id)->whereIn('event_type', AttendanceEvent::ATTENDANCE_TYPES)->count(), 'A turned-away scan is never attendance.');
         $this->scanAt($user, $endsToday, '2026-11-09 07:00')->assertJsonPath('code', 'CHECKED_IN')->assertJsonPath('data.membership', ['valid_until' => '2026-11-09', 'days_left' => 0]);
         $this->scanAt($user, $student, '2026-11-09 08:00')->assertJsonPath('code', 'MEMBERSHIP_EXPIRED');
     }

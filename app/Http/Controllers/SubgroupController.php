@@ -63,6 +63,9 @@ class SubgroupController extends Controller
         if ($owned->persons()->exists() || $owned->schedules()->current($today)->exists()) {
             return response()->json(['message' => 'This subgroup cannot be deleted while it has people or schedules.'], 409);
         }
+        if ($owned->hasAttendanceHistory()) {
+            return response()->json(['message' => 'This subgroup has past attendance, so deleting it would change old reports. Rename it instead.'], 409);
+        }
         // Ended schedule versions were only kept for past reports; they go with the subgroup.
         $owned->schedules()->delete();
         $owned->delete();

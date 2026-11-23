@@ -14,6 +14,7 @@ class OrganizationTerminology
             'warehouse' => ['person_singular' => 'Worker', 'person_plural' => 'Workers', 'group_singular' => 'Department', 'group_plural' => 'Departments', 'subgroup_singular' => 'Shift', 'subgroup_plural' => 'Shifts'],
             'staffing' => ['person_singular' => 'Worker', 'person_plural' => 'Workers', 'group_singular' => 'Client', 'group_plural' => 'Clients', 'subgroup_singular' => 'Site', 'subgroup_plural' => 'Sites'],
             'sports_academy' => ['person_singular' => 'Athlete', 'person_plural' => 'Athletes', 'group_singular' => 'Sport', 'group_plural' => 'Sports', 'subgroup_singular' => 'Team', 'subgroup_plural' => 'Teams'],
+            'fitness' => ['person_singular' => 'Member', 'person_plural' => 'Members', 'group_singular' => 'Plan', 'group_plural' => 'Plans', 'subgroup_singular' => 'Class', 'subgroup_plural' => 'Classes'],
             default => ['person_singular' => 'Person', 'person_plural' => 'People', 'group_singular' => 'Group', 'group_plural' => 'Groups', 'subgroup_singular' => 'Subgroup', 'subgroup_plural' => 'Subgroups'],
         };
     }

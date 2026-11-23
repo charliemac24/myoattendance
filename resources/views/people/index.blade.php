@@ -21,7 +21,7 @@
                 <x-icons.file-text />
                 <span>Import CSV</span>
             </a>
-            <a href="/api/people/export" class="people-action">
+            <a href="/api/people/export" class="people-action" id="people-export-link">
                 <x-icons.download />
                 <span>Export CSV</span>
             </a>
@@ -35,6 +35,16 @@
             <select id="filter-group"><option value="">All {{ strtolower($terminology['group_plural']) }}</option></select>
             <select id="filter-subgroup" disabled><option value="">All {{ strtolower($terminology['subgroup_plural']) }}</option></select>
         </div>
+        @if ($user->organization->type !== 'school')
+            <div class="filter-row" style="margin-top:8px;">
+                <select id="filter-membership" aria-label="Membership">
+                    <option value="">Any membership</option>
+                    <option value="expiring_7">Expiring in 7 days</option>
+                    <option value="expiring_14">Expiring in 14 days</option>
+                    <option value="expired">Expired</option>
+                </select>
+            </div>
+        @endif
     </div>
 
     <div class="people-roster">

@@ -54,12 +54,15 @@ class ProcessAttendanceScan
             if (! $person) {
                 return $this->remember($organization, $scanRequestId, null, $this->failure('INVALID_QR', 'Invalid or unrecognized QR code.'));
             }
+            $localTime = $occurredAt->copy()->setTimezone($organization->timezone);
             if (! $person->is_active) {
+                $this->logRefusal($organization, $person, 'PERSON_INACTIVE', $occurredAt, $localTime);
+
                 return $this->remember($organization, $scanRequestId, $person, $this->failure('PERSON_INACTIVE', 'This person is inactive.'));
             }
 
-            $localTime = $occurredAt->copy()->setTimezone($organization->timezone);
             if ($person->membership_valid_until && $localTime->toDateString() > $person->membership_valid_until->toDateString()) {
+                $this->logRefusal($organization, $person, 'MEMBERSHIP_EXPIRED', $occurredAt, $localTime);
                 $result = $this->failure('MEMBERSHIP_EXPIRED', 'Membership expired on '.$person->membership_valid_until->format('M j, Y').'.', $this->personData($person) + ['membership' => $this->membershipData($person, $localTime)]);
 
                 return $this->remember($organization, $scanRequestId, $person, $result);
@@ -294,6 +297,28 @@ class ProcessAttendanceScan
                 'local_time' => $localTime->format('g:i A'),
             ],
         ];
+    }
+
+    /**
+     * Save a turned-away scan so the daily log can show it. It is not attendance: reports only read ATTENDANCE_TYPES.
+     * Scanning the same card again within a minute is not saved twice.
+     */
+    private function logRefusal(Organization $organization, Person $person, string $reason, Carbon $occurredAt, CarbonInterface $localTime): void
+    {
+        $recent = AttendanceEvent::query()->where('organization_id', $organization->id)->where('person_id', $person->id)
+            ->where('event_type', AttendanceEvent::TYPE_REFUSED)->where('occurred_at', '>', $occurredAt->copy()->subMinute())->exists();
+        if ($recent) {
+            return;
+        }
+
+        AttendanceEvent::create([
+            'organization_id' => $organization->id,
+            'person_id' => $person->id,
+            'event_type' => AttendanceEvent::TYPE_REFUSED,
+            'occurred_at' => $occurredAt,
+            'performed_by_user_id' => auth()->id(),
+            'meta' => array_filter(['reason' => $reason, 'group_id' => $person->group_id, 'subgroup_id' => $person->subgroup_id, 'attendance_date' => $localTime->toDateString(), 'membership_valid_until' => $person->membership_valid_until?->toDateString()], static fn ($value) => $value !== null),
+        ]);
     }
 
     /** @return array{valid_until: string, days_left: int}|null */

@@ -15,12 +15,12 @@
             <p class="terminology-section-label">Industry</p>
             <div class="terminology-field">
                 <label class="terminology-field-label" for="tm-industry">Your organization is a&hellip;</label>
-                <select id="tm-industry" class="terminology-input">
+                <select id="tm-industry" class="terminology-input" @disabled(! $user->isOwner())>
                     @foreach (\App\Support\OrganizationTypes::selectableLabels($user->organization->type) as $value => $label)
                         <option value="{{ $value }}" @selected($user->organization->type === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
-                <p class="terminology-field-label" style="font-weight:400;font-size:12px;">Picking an industry switches the labels below to its usual words.</p>
+                <p class="terminology-field-label" style="font-weight:400;font-size:12px;">Picking an industry switches the labels below to its usual words.@if (! $user->isOwner()) Only the owner can change the industry.@endif</p>
             </div>
         </div>
 
@@ -129,7 +129,7 @@
                 industry.addEventListener('change', async () => {
                     clearMessages();
                     const label = industry.options[industry.selectedIndex].text;
-                    if (!window.confirm(`Switch to ${label}? Your labels will change to the usual ${label} words.`)) {
+                    if (!window.confirm(`Switch to ${label}?\n\nYour labels will change to the usual ${label} words. The industry also decides how attendance is read (late, absent, holidays, rest days and work hours), so past reports may look different after the switch.`)) {
                         industry.value = currentIndustry;
                         return;
                     }

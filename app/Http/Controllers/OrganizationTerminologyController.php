@@ -29,9 +29,15 @@ class OrganizationTerminologyController extends Controller
         return response()->json(['terminology' => OrganizationTerminology::forOrganization($organization->fresh())]);
     }
 
-    /** Switch the organization's industry. Its labels switch to that industry's wording (custom labels are cleared). */
+    /**
+     * Switch the organization's industry. Its labels switch to that industry's wording (custom labels are cleared).
+     * Only the owner can do it: the industry also decides how past reports read (late, holidays, rest days).
+     */
     public function updateIndustry(Request $request): JsonResponse
     {
+        if (! $request->user()->isOwner()) {
+            return response()->json(['message' => 'Only the owner can change the industry.'], 403);
+        }
         $data = $request->validate(['type' => ['required', 'string', Rule::in(OrganizationTypes::VALUES)]]);
         $organization = $request->user()->organization;
         $organization->update(['type' => $data['type'], 'terminology' => null]);

@@ -50,7 +50,25 @@ const els = {
     empty: document.getElementById('logs-empty'),
     printBtn: document.getElementById('logs-print-btn'),
     printReport: document.getElementById('print-report'),
+    refused: document.getElementById('logs-refused'),
+    refusedCount: document.getElementById('logs-refused-count'),
+    refusedList: document.getElementById('logs-refused-list'),
 };
+
+const REFUSED_REASONS = { MEMBERSHIP_EXPIRED: 'Membership expired', PERSON_INACTIVE: 'Archived' };
+
+/** Turned-away scans for the day. They never count as attendance; the front desk uses this to follow up. */
+function renderRefused(report) {
+    if (!els.refused) return;
+    const refused = report.refused || [];
+    els.refused.hidden = refused.length === 0;
+    els.refusedCount.textContent = String(refused.length);
+    els.refusedList.innerHTML = refused.map((row) => {
+        const reason = REFUSED_REASONS[row.reason] || 'Refused';
+        const detail = row.reason === 'MEMBERSHIP_EXPIRED' && row.membership_valid_until ? ` on ${escapeHtml(row.membership_valid_until)}` : '';
+        return `<div><strong>${escapeHtml(row.time)}</strong> · <a href="/people/${row.person.id}">${escapeHtml(row.person.first_name)} ${escapeHtml(row.person.last_name)}</a> (#${escapeHtml(row.person.person_number)}) · ${reason}${detail}</div>`;
+    }).join('');
+}
 
 els.dateInput.value = state.date;
 
@@ -227,6 +245,7 @@ async function refresh() {
     state.report = report;
     renderRibbon(report.summary, report.holiday);
     renderResults(report);
+    renderRefused(report);
     renderGroupFilters();
     renderActiveFilters();
 }

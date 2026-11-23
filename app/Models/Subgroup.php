@@ -10,6 +10,13 @@ class Subgroup extends Model
 {
     protected $fillable = ['organization_id', 'group_id', 'name'];
 
+    /** True when past reports depend on this subgroup: someone was assigned to it at some point, or scanned while in it. */
+    public function hasAttendanceHistory(): bool
+    {
+        return PersonAssignment::query()->where('organization_id', $this->organization_id)->where('subgroup_id', $this->id)->exists()
+            || AttendanceEvent::query()->where('organization_id', $this->organization_id)->where('meta->subgroup_id', $this->id)->whereIn('event_type', AttendanceEvent::ATTENDANCE_TYPES)->exists();
+    }
+
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);

@@ -3,17 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\Person;
+use App\Support\SafeCsv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PersonController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $membership = $this->membershipFilter($request);
+        $today = now($request->user()->organization->timezone)->toDateString();
         $people = $request->user()->organization->persons()->with(['group:id,name', 'subgroup:id,name'])
+            ->when($membership, fn ($query) => $query->membershipStatus($membership, $today))
             ->when($request->string('search')->trim()->value(), function ($query, $search): void {
                 $query->where(fn ($nested) => $nested->where('person_number', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
@@ -23,6 +28,7 @@ class PersonController extends Controller
             })
             ->when($request->filled('group_id'), fn ($query) => $query->where('group_id', $request->integer('group_id')))
             ->when($request->filled('subgroup_id'), fn ($query) => $query->where('subgroup_id', $request->integer('subgroup_id')))
+            ->when($membership, fn ($query) => $query->orderBy('membership_valid_until'))
             ->orderBy('last_name')->orderBy('first_name')->paginate(min($request->integer('per_page', 20), 100))->withQueryString();
 
         return response()->json($people);
@@ -31,19 +37,23 @@ class PersonController extends Controller
     public function export(Request $request): StreamedResponse
     {
         $organization = $request->user()->organization;
+        $membership = $this->membershipFilter($request);
+        $today = now($organization->timezone)->toDateString();
+        $filename = $membership ? "persons-{$membership}-{$today}.csv" : 'persons.csv';
 
-        return response()->streamDownload(function () use ($organization): void {
+        return response()->streamDownload(function () use ($organization, $membership, $today): void {
             $output = fopen('php://output', 'wb');
-            fputcsv($output, ['person_number', 'first_name', 'last_name', 'group', 'subgroup', 'contact_number', 'membership_valid_until']);
+            SafeCsv::put($output, ['person_number', 'first_name', 'last_name', 'group', 'subgroup', 'contact_number', 'membership_valid_until']);
 
             $organization->persons()
                 ->with(['group:id,name', 'subgroup:id,name'])
+                ->when($membership, fn ($query) => $query->membershipStatus($membership, $today)->orderBy('membership_valid_until'))
                 ->orderBy('last_name')
                 ->orderBy('first_name')
                 ->orderBy('person_number')
                 ->chunk(500, function ($people) use ($output): void {
                     foreach ($people as $person) {
-                        fputcsv($output, [
+                        SafeCsv::put($output, [
                             $person->person_number,
                             $person->first_name,
                             $person->last_name,
@@ -56,7 +66,7 @@ class PersonController extends Controller
                 });
 
             fclose($output);
-        }, 'persons.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function store(Request $request): JsonResponse
@@ -137,9 +147,20 @@ class PersonController extends Controller
         }
         $data['group_id'] = $group?->id;
         $data['subgroup_id'] = $subgroup?->id;
-        $data['is_active'] = $data['is_active'] ?? true;
+        if ($ignore === null) {
+            // New people start active. On update, the archive state only changes when it is sent explicitly.
+            $data['is_active'] ??= true;
+        }
 
         return $data;
+    }
+
+    /** The People list's membership filter (expired, expiring_7, expiring_14), or null for everyone. */
+    private function membershipFilter(Request $request): ?string
+    {
+        $request->validate(['membership' => ['nullable', Rule::in(Person::MEMBERSHIP_FILTERS)]]);
+
+        return $request->filled('membership') ? $request->string('membership')->value() : null;
     }
 
     private function owned(Request $request, int $id): Person

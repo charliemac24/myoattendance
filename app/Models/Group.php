@@ -16,6 +16,13 @@ class Group extends Model
 
     protected $fillable = ['organization_id', 'name', 'attendance_mode', 'scan_out'];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Group $group): void {
+            $group->attendance_mode ??= $group->organization?->defaultGroupMode() ?? self::MODE_SCHEDULED;
+        });
+    }
+
     protected function casts(): array
     {
         return ['scan_out' => 'boolean'];
@@ -24,6 +31,22 @@ class Group extends Model
     public function isOpen(): bool
     {
         return $this->attendance_mode === self::MODE_OPEN;
+    }
+
+    /** True once anyone has scanned while in this group. Its attendance mode then decides how those past days read. */
+    public function hasAttendanceEvents(): bool
+    {
+        return AttendanceEvent::query()->where('organization_id', $this->organization_id)->where('meta->group_id', $this->id)->whereIn('event_type', AttendanceEvent::ATTENDANCE_TYPES)->exists();
+    }
+
+    /**
+     * True when past reports depend on this group: someone was assigned to it at some point, or scanned while in it.
+     * Deleting it would remove or rewrite that history.
+     */
+    public function hasAttendanceHistory(): bool
+    {
+        return PersonAssignment::query()->where('organization_id', $this->organization_id)->where('group_id', $this->id)->exists()
+            || $this->hasAttendanceEvents();
     }
 
     public function organization(): BelongsTo

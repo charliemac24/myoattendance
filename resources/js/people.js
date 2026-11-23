@@ -20,6 +20,7 @@ const state = {
     search: '',
     groupId: '',
     subgroupId: '',
+    membership: '',
     page: 1,
     groups: [],
     subgroups: [],
@@ -34,6 +35,8 @@ const els = {
     searchClear: document.getElementById('people-search-clear'),
     filterGroup: document.getElementById('filter-group'),
     filterSubgroup: document.getElementById('filter-subgroup'),
+    filterMembership: document.getElementById('filter-membership'),
+    exportLink: document.getElementById('people-export-link'),
     activeFilters: document.getElementById('active-filters'),
     filterSummaryText: document.getElementById('filter-summary-text'),
     activeChips: document.getElementById('active-chips'),
@@ -89,7 +92,11 @@ function statusClass(status) {
 function metaLine(person) {
     const parts = [];
     if (person.group?.name) parts.push(person.subgroup?.name ? `${person.group.name} · ${person.subgroup.name}` : person.group.name);
-    return parts.join(' ');
+    if (state.membership && person.membership_valid_until) {
+        const expired = person.membership_valid_until < localToday(config.organizationTimezone);
+        parts.push(`${expired ? 'Expired' : 'Valid until'} ${person.membership_valid_until}`);
+    }
+    return parts.join(' · ');
 }
 
 const CHEVRON_SVG = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.5 15L12.5 10L7.5 5" stroke="#4B5563" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -122,7 +129,7 @@ function renderPeople(append) {
     els.list.insertAdjacentHTML('beforeend', state.people.map(personRowHtml).join(''));
 
     const hasResults = state.people.length > 0;
-    const hasActiveQuery = Boolean(state.search || state.groupId || state.subgroupId);
+    const hasActiveQuery = Boolean(state.search || state.groupId || state.subgroupId || state.membership);
 
     els.empty.hidden = hasResults || hasActiveQuery;
     els.noResults.hidden = hasResults || !hasActiveQuery;
@@ -136,7 +143,7 @@ function renderPeople(append) {
 }
 
 function renderFilters() {
-    const hasFilter = state.groupId || state.subgroupId;
+    const hasFilter = state.groupId || state.subgroupId || state.membership;
     els.activeFilters.hidden = !hasFilter;
     if (!hasFilter) return;
 
@@ -145,11 +152,14 @@ function renderFilters() {
     const parts = [];
     if (group) parts.push(`${terminology.group_singular}: ${group.name}`);
     if (subgroup) parts.push(`${terminology.subgroup_singular}: ${subgroup.name}`);
+    const membershipLabel = state.membership && els.filterMembership ? els.filterMembership.options[els.filterMembership.selectedIndex]?.text : '';
+    if (membershipLabel) parts.push(`Membership: ${membershipLabel}`);
     els.filterSummaryText.textContent = parts.join(' · ');
 
     const chips = [];
     if (group) chips.push(`<span class="filter-chip">${escapeHtml(group.name)}</span>`);
     if (subgroup) chips.push(`<span class="filter-chip">${escapeHtml(subgroup.name)}</span>`);
+    if (membershipLabel) chips.push(`<span class="filter-chip">${escapeHtml(membershipLabel)}</span>`);
     els.activeChips.innerHTML = chips.join('');
 }
 
@@ -189,6 +199,7 @@ async function loadPeople(append = false) {
     if (state.search) params.set('search', state.search);
     if (state.groupId) params.set('group_id', state.groupId);
     if (state.subgroupId) params.set('subgroup_id', state.subgroupId);
+    if (state.membership) params.set('membership', state.membership);
 
     const response = await get(`/api/people?${params.toString()}`);
     const newPeople = response.data || [];
@@ -203,6 +214,7 @@ function listUrl() {
     if (state.search) params.set('search', state.search);
     if (state.groupId) params.set('group_id', state.groupId);
     if (state.subgroupId) params.set('subgroup_id', state.subgroupId);
+    if (state.membership) params.set('membership', state.membership);
     const query = params.toString();
 
     return query ? `/people?${query}` : '/people';
@@ -220,9 +232,16 @@ function syncListUrl() {
     try { window.sessionStorage.setItem(LIST_URL_STORAGE_KEY, url); } catch (error) { /* storage unavailable */ }
 }
 
+/** The CSV export follows the membership filter, so "Expired" downloads just the expired members. */
+function syncExportLink() {
+    if (!els.exportLink) return;
+    els.exportLink.href = state.membership ? `/api/people/export?membership=${encodeURIComponent(state.membership)}` : '/api/people/export';
+}
+
 async function refresh() {
     state.page = 1;
     syncListUrl();
+    syncExportLink();
     await Promise.all([loadReportStatuses(), loadPeople(false)]);
 }
 
@@ -254,6 +273,8 @@ els.resetSearchBtn.addEventListener('click', () => {
     state.search = '';
     state.groupId = '';
     state.subgroupId = '';
+    state.membership = '';
+    if (els.filterMembership) els.filterMembership.value = '';
     els.filterGroup.value = '';
     els.filterSubgroup.value = '';
     updateSubgroupOptions(els.filterSubgroup, '', `All ${terminology.subgroup_plural.toLowerCase()}`);
@@ -277,9 +298,17 @@ els.filterSubgroup.addEventListener('change', () => {
     refresh();
 });
 
+els.filterMembership?.addEventListener('change', () => {
+    state.membership = els.filterMembership.value;
+    renderFilters();
+    refresh();
+});
+
 els.clearFiltersBtn.addEventListener('click', () => {
     state.groupId = '';
     state.subgroupId = '';
+    state.membership = '';
+    if (els.filterMembership) els.filterMembership.value = '';
     els.filterGroup.value = '';
     els.filterSubgroup.value = '';
     updateSubgroupOptions(els.filterSubgroup, '', `All ${terminology.subgroup_plural.toLowerCase()}`);
@@ -463,6 +492,11 @@ async function init() {
     if (subgroupId) {
         state.subgroupId = subgroupId;
         els.filterSubgroup.value = subgroupId;
+    }
+    const membership = params.get('membership') || '';
+    if (membership && els.filterMembership) {
+        state.membership = membership;
+        els.filterMembership.value = membership;
     }
     renderFilters();
     updateSearchShellState();

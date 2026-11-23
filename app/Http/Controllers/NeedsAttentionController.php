@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\BuildNeedsAttentionReport;
 use App\Support\OrganizationTerminology;
+use App\Support\SafeCsv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -25,9 +26,9 @@ class NeedsAttentionController extends Controller
 
         return response()->streamDownload(function () use ($data, $terminology): void {
             $output = fopen('php://output', 'wb');
-            fputcsv($output, ['ID Number', 'Full Name', $terminology['group_singular'], $terminology['subgroup_singular'], 'Contact Number', 'Last Seen', 'Days Since Last Seen', 'Absences In A Row', 'Attendance Rate (Last 30 Days)', 'Reasons']);
+            SafeCsv::put($output, ['ID Number', 'Full Name', $terminology['group_singular'], $terminology['subgroup_singular'], 'Contact Number', 'Last Seen', 'Days Since Last Seen', 'Absences In A Row', 'Attendance Rate (Last 30 Days)', 'Reasons']);
             foreach ($data['people'] as $person) {
-                fputcsv($output, [
+                SafeCsv::put($output, [
                     $person['person_number'],
                     $person['full_name'],
                     $person['group'],

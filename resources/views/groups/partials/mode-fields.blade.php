@@ -1,5 +1,6 @@
 @php($mode = $mode ?? 'scheduled')
 @php($scanOut = $scanOut ?? false)
+@php($modeLocked = $modeLocked ?? false)
 {{-- How people in this group check in. "On a schedule" is today's behavior; "Anytime" is for gyms and open hours. --}}
 <style>
     .mode-options { display: flex; flex-direction: column; gap: 8px; }
@@ -14,14 +15,17 @@
     <p class="plain-field-label">How do {{ strtolower($terminology['person_plural']) }} check in?</p>
     <div class="mode-options">
         <label class="mode-option">
-            <input type="radio" name="attendance_mode" value="scheduled" @checked($mode !== 'open')>
+            <input type="radio" name="attendance_mode" value="scheduled" @checked($mode !== 'open') @disabled($modeLocked && $mode === 'open')>
             <div><strong>On a schedule</strong><span>For classes, school days and shifts. Uses Schedules to mark Present, Late and Absent.</span></div>
         </label>
         <label class="mode-option">
-            <input type="radio" name="attendance_mode" value="open" @checked($mode === 'open')>
+            <input type="radio" name="attendance_mode" value="open" @checked($mode === 'open') @disabled($modeLocked && $mode !== 'open')>
             <div><strong>Anytime (open hours)</strong><span>For gyms and walk-ins. Scan in any day, any time, as often as they come. Visits are counted; nobody is marked late or absent.</span></div>
         </label>
     </div>
+    @if ($modeLocked)
+        <p class="plain-field-hint" style="font-size:12px;color:#6b7280;margin-top:6px;">{{ $terminology['person_plural'] }} have already scanned here, so this can no longer change (it would rewrite past reports). Create a new {{ strtolower($terminology['group_singular']) }} for a different check-in style.</p>
+    @endif
     <label class="mode-scan-out" id="mode-scan-out" @if ($mode !== 'open') hidden @endif>
         <input type="checkbox" name="scan_out" value="1" @checked($scanOut)>
         Also scan when they leave

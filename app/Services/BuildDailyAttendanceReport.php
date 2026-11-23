@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AttendanceEvent;
 use App\Models\Group;
 use App\Models\Organization;
 use App\Models\Schedule;
@@ -20,7 +21,7 @@ class BuildDailyAttendanceReport
 
     public function __construct(private readonly ScheduleResolver $scheduleResolver, private readonly ClassifyDailyAttendance $classifier, private readonly HolidayCalendar $holidays) {}
 
-    /** @return array{date: string, holiday: ?string, summary: array<string, int>, people: array<int, array<string, mixed>>} */
+    /** @return array{date: string, holiday: ?string, summary: array<string, int>, people: array<int, array<string, mixed>>, refused: array<int, array<string, mixed>>} */
     public function handle(Organization $organization, string $date, array $filters = []): array
     {
         $localDate = Carbon::createFromFormat('!Y-m-d', $date, $organization->timezone);
@@ -62,7 +63,42 @@ class BuildDailyAttendanceReport
             'holiday' => $this->holidays->organizationNameOn($organization->id, $localDate->toDateString()),
             'summary' => ['expected_total' => $rows->count(), 'present' => $present, 'late' => $late, 'absent' => $rows->where('status', 'ABSENT')->count(), 'no_time_in' => $rows->where('no_time_in', true)->count(), 'no_time_out' => $rows->where('no_time_out', true)->count()],
             'people' => $this->filterRows($rows, $filters)->all(),
+            'refused' => $this->refusedScans($organization, $localDate, $filters),
         ];
+    }
+
+    /**
+     * Scans the scanner turned away on this date (archived person, expired membership), newest first. They are
+     * listed apart from attendance and never change the counts above.
+     *
+     * @return array<int, array{person: array<string, mixed>, reason: string, time: string, membership_valid_until: ?string}>
+     */
+    private function refusedScans(Organization $organization, CarbonInterface $localDate, array $filters): array
+    {
+        $date = $localDate->toDateString();
+        $search = strtolower(trim((string) ($filters['search'] ?? '')));
+
+        return $organization->attendanceEvents()
+            ->where('event_type', AttendanceEvent::TYPE_REFUSED)
+            ->whereBetween('occurred_at', [$localDate->copy()->startOfDay()->utc(), $localDate->copy()->endOfDay()->utc()])
+            ->with('person:id,person_number,first_name,last_name')
+            ->orderByDesc('occurred_at')->orderByDesc('id')->get()
+            ->filter(function (AttendanceEvent $event) use ($filters, $search): bool {
+                $meta = $event->meta ?? [];
+                $person = $event->person;
+
+                return $person
+                    && (empty($filters['group_id']) || (string) ($meta['group_id'] ?? '') === (string) $filters['group_id'])
+                    && (empty($filters['subgroup_id']) || (string) ($meta['subgroup_id'] ?? '') === (string) $filters['subgroup_id'])
+                    && ($search === '' || str_contains(strtolower($person->person_number.' '.$person->first_name.' '.$person->last_name), $search));
+            })
+            ->filter(fn (AttendanceEvent $event): bool => $event->attendanceDate($organization->timezone) === $date)
+            ->map(fn (AttendanceEvent $event): array => [
+                'person' => ['id' => $event->person->id, 'person_number' => $event->person->person_number, 'first_name' => $event->person->first_name, 'last_name' => $event->person->last_name],
+                'reason' => ($event->meta ?? [])['reason'] ?? 'REFUSED',
+                'time' => $event->occurred_at->copy()->setTimezone($organization->timezone)->format('g:i A'),
+                'membership_valid_until' => ($event->meta ?? [])['membership_valid_until'] ?? null,
+            ])->values()->all();
     }
 
     private function row($person, Collection $events, Organization $organization, ?Schedule $schedule, CarbonInterface $localDate, CarbonInterface $localNow): array

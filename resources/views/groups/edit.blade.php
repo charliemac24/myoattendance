@@ -45,7 +45,7 @@
                         </button>
                     </div>
                 </div>
-                @include('groups.partials.mode-fields', ['terminology' => $terminology, 'mode' => $group->attendance_mode, 'scanOut' => $group->scan_out])
+                @include('groups.partials.mode-fields', ['terminology' => $terminology, 'mode' => $group->attendance_mode, 'scanOut' => $group->scan_out, 'modeLocked' => $group->hasAttendanceEvents()])
             </form>
 
             <div class="danger-zone">
@@ -53,7 +53,7 @@
                     <x-icons.alert-circle />
                     <span>Danger Zone</span>
                 </div>
-                <p class="danger-zone-body">Deleting this {{ strtolower($terminology['group_singular']) }} will un-assign all subgroup directories and associated profiles. This action cannot be undone.</p>
+                <p class="danger-zone-body">Only a {{ strtolower($terminology['group_singular']) }} that has never been used can be deleted. Once {{ strtolower($terminology['person_plural']) }} have been in it, rename it instead so past reports stay correct. This action cannot be undone.</p>
                 <button type="button" class="btn-danger-outline" id="delete-group-btn">Delete {{ $terminology['group_singular'] }}</button>
             </div>
         </div>

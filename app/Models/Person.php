@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -63,6 +64,28 @@ class Person extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(PersonAssignment::class);
+    }
+
+    /** Filters for the People list: memberships that ended, or end within 7 or 14 days. */
+    public const MEMBERSHIP_FILTERS = ['expired', 'expiring_7', 'expiring_14'];
+
+    /**
+     * Active people whose membership matches the filter, as of $today (Y-m-d in the organization's timezone).
+     * "Expired" means the last valid day has passed; "expiring" includes today through N days from now.
+     *
+     * @param  Builder<Person>  $query
+     */
+    public function scopeMembershipStatus(Builder $query, string $filter, string $today): void
+    {
+        $query->where('is_active', true)->whereNotNull('membership_valid_until');
+        if ($filter === 'expired') {
+            $query->whereDate('membership_valid_until', '<', $today);
+
+            return;
+        }
+        $days = $filter === 'expiring_7' ? 7 : 14;
+        $query->whereDate('membership_valid_until', '>=', $today)
+            ->whereDate('membership_valid_until', '<=', Carbon::parse($today)->addDays($days)->toDateString());
     }
 
     /** False from the day they were archived (in the organization's timezone). */

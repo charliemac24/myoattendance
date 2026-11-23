@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\AttendanceTimeline;
 use App\Services\BuildPersonAttendanceHistory;
+use App\Support\SafeCsv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -25,10 +26,10 @@ class PersonAttendanceController extends Controller
 
         return response()->streamDownload(function () use ($data): void {
             $output = fopen('php://output', 'wb');
-            fputcsv($output, ['ID Number', 'Full Name', 'Date', 'Day', 'Status', 'Time In', 'Time Out', 'Minutes Late', 'Note']);
+            SafeCsv::put($output, ['ID Number', 'Full Name', 'Date', 'Day', 'Status', 'Time In', 'Time Out', 'Minutes Late', 'Note']);
             foreach ($data['days'] as $day) {
                 $note = collect([$day['holiday'] ? 'Holiday: '.$day['holiday'] : null, $day['scheduled'] || $day['holiday'] ? null : 'Not a scheduled day', $day['no_time_in'] ? 'No time in' : null, $day['no_time_out'] ? 'No time out' : null])->filter()->implode('; ');
-                fputcsv($output, [$data['person']['person_number'], $data['person']['full_name'], $day['date'], $day['day'], self::STATUS_LABELS[$day['status']], $day['time_in'], $day['time_out'], $day['minutes_late'], $note]);
+                SafeCsv::put($output, [$data['person']['person_number'], $data['person']['full_name'], $day['date'], $day['day'], self::STATUS_LABELS[$day['status']], $day['time_in'], $day['time_out'], $day['minutes_late'], $note]);
             }
             fclose($output);
         }, "attendance-{$data['person']['person_number']}-{$name}-{$data['from']}-to-{$data['to']}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);

@@ -87,7 +87,7 @@ class CodexRouteAndIndustryRegressionTest extends TestCase
     {
         Http::fake();
         [$owner, $organization] = $this->tenant('school');
-        $this->assertSame(['school', 'company', 'construction', 'training_center', 'warehouse', 'staffing', 'sports_academy', 'other'], OrganizationTypes::VALUES);
+        $this->assertSame(['school', 'company', 'construction', 'training_center', 'warehouse', 'staffing', 'sports_academy', 'fitness', 'other'], OrganizationTypes::VALUES);
         $expected = [
             'school' => ['Student', 'Students', 'Grade Level', 'Grade Levels', 'Section', 'Sections'],
             'company' => ['Employee', 'Employees', 'Department', 'Departments', 'Team', 'Teams'],
@@ -96,6 +96,7 @@ class CodexRouteAndIndustryRegressionTest extends TestCase
             'warehouse' => ['Worker', 'Workers', 'Department', 'Departments', 'Shift', 'Shifts'],
             'staffing' => ['Worker', 'Workers', 'Client', 'Clients', 'Site', 'Sites'],
             'sports_academy' => ['Athlete', 'Athletes', 'Sport', 'Sports', 'Team', 'Teams'],
+            'fitness' => ['Member', 'Members', 'Plan', 'Plans', 'Class', 'Classes'],
             'other' => ['Person', 'People', 'Group', 'Groups', 'Subgroup', 'Subgroups'],
         ];
         $keys = ['person_singular', 'person_plural', 'group_singular', 'group_plural', 'subgroup_singular', 'subgroup_plural'];

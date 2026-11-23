@@ -41,7 +41,7 @@
                     <input type="text" id="group-name" name="name" class="plain-input" placeholder="e.g. Grade 9, Evening Shift" required>
                     <p class="field-helper">Use clear, recognizable labels to group attendance logs.</p>
                 </div>
-                @include('groups.partials.mode-fields', ['terminology' => $terminology])
+                @include('groups.partials.mode-fields', ['terminology' => $terminology, 'mode' => $user->organization->defaultGroupMode()])
             </form>
 
             <div class="guidance-card">

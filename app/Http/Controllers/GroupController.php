@@ -44,7 +44,12 @@ class GroupController extends Controller
         if ($request->user()->organization->groups()->whereRaw('lower(name) = ?', [strtolower(trim($data['name']))])->whereKeyNot($owned->id)->exists()) {
             return response()->json(['message' => 'That group name already exists in this organization.', 'errors' => ['name' => ['That group name already exists in this organization.']]], 422);
         }
-        $owned->update(['name' => trim($data['name']), ...$this->mode($data)]);
+        $mode = $this->mode($data);
+        // Reports read past days with the group's current mode, so switching it after scans would rewrite them.
+        if (isset($mode['attendance_mode']) && $mode['attendance_mode'] !== $owned->attendance_mode && $owned->hasAttendanceEvents()) {
+            return response()->json(['message' => 'People have already scanned in this group, so changing how they check in would rewrite past reports. Create a new group instead.', 'errors' => ['attendance_mode' => ['The check-in mode cannot change after people have scanned in this group.']]], 422);
+        }
+        $owned->update(['name' => trim($data['name']), ...$mode]);
 
         return response()->json(['group' => $owned->fresh()]);
     }
@@ -55,6 +60,9 @@ class GroupController extends Controller
         // Ended schedule versions are only kept for past reports and do not block deleting the group.
         if ($owned->subgroups()->exists() || $owned->persons()->exists() || $owned->schedules()->current(now($request->user()->organization->timezone)->toDateString())->exists()) {
             return response()->json(['message' => 'This group cannot be deleted while it has subgroups, people, or schedules.'], 409);
+        }
+        if ($owned->hasAttendanceHistory()) {
+            return response()->json(['message' => 'This group has past attendance, so deleting it would change old reports. Rename it instead.'], 409);
         }
         $owned->delete();
 

@@ -17,6 +17,12 @@ class Organization extends Model
         return in_array($this->type, OrganizationTypes::WORKFORCE, true);
     }
 
+    /** How a new group checks in unless told otherwise: gyms and studios default to open hours. */
+    public function defaultGroupMode(): string
+    {
+        return in_array($this->type, OrganizationTypes::OPEN_HOURS_BY_DEFAULT, true) ? Group::MODE_OPEN : Group::MODE_SCHEDULED;
+    }
+
     protected function casts(): array
     {
         return ['terminology' => 'array', 'sms_estimate_people' => 'integer', 'sms_estimate_texts' => 'array'];

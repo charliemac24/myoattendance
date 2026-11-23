@@ -130,10 +130,13 @@ class HolidaysTest extends TestCase
         $this->assertSame('Absent', $this->monthlyOf($morning)['2026-11-04']);
         $this->assertCount(2, $this->actingAs($this->user)->getJson('/api/attendance/report?date=2026-11-03')->json('people'));
 
-        $this->actingAs($this->user)->postJson('/api/holidays', ['name' => 'Gone with group', 'starts_on' => '2026-11-05', 'group_id' => $afternoon->id])->assertCreated();
+        // A group that people were in keeps its history and cannot be deleted; an unused one can, with its holidays.
         $ned->update(['group_id' => null, 'subgroup_id' => null]);
         Schedule::where('group_id', $afternoon->id)->delete();
-        $this->actingAs($this->user)->deleteJson("/api/groups/{$afternoon->id}")->assertOk();
+        $this->actingAs($this->user)->deleteJson("/api/groups/{$afternoon->id}")->assertStatus(409);
+        $unused = Group::create(['organization_id' => $this->organization->id, 'name' => 'Evening']);
+        $this->actingAs($this->user)->postJson('/api/holidays', ['name' => 'Gone with group', 'starts_on' => '2026-11-05', 'group_id' => $unused->id])->assertCreated();
+        $this->actingAs($this->user)->deleteJson("/api/groups/{$unused->id}")->assertOk();
         $this->assertSame(0, Holiday::where('name', 'Gone with group')->count(), 'Group holidays go with their group.');
         $this->assertNotNull($mia->fresh());
         Http::assertNothingSent();

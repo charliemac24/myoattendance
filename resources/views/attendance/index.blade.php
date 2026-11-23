@@ -45,6 +45,12 @@
 
     <div class="logs-list" id="logs-list"></div>
 
+    {{-- Scans the scanner turned away (archived, expired membership). Shown apart; they are not attendance. --}}
+    <section id="logs-refused" hidden style="margin:16px 16px 0;padding:12px 14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;">
+        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#b91c1c;">Turned away at the scanner (<span id="logs-refused-count">0</span>)</p>
+        <div id="logs-refused-list" style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#374151;"></div>
+    </section>
+
     <div class="empty-state" id="logs-empty" hidden>
         <p>No logs found.</p>
     </div>

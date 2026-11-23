@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SafeCsv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +45,7 @@ class PersonImportController extends Controller
             }
             $values = array_pad($row, count($header), null);
             $record = array_combine($header, array_slice($values, 0, count($header)));
-            $record = array_map(fn ($value) => is_string($value) ? trim($value) : $value, $record);
+            $record = array_map(fn ($value) => SafeCsv::unescape(is_string($value) ? trim($value) : $value), $record);
             $existing = ! empty($record['person_number'])
                 ? $organization->persons()
                     ->where('organization_id', $organization->id)

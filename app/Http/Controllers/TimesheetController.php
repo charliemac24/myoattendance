@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\BuildTimesheet;
 use App\Support\OrganizationTerminology;
+use App\Support\SafeCsv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -28,17 +29,17 @@ class TimesheetController extends Controller
         return response()->streamDownload(function () use ($data, $format, $terminology, $hours): void {
             $output = fopen('php://output', 'wb');
             if ($format === 'summary') {
-                fputcsv($output, ['ID Number', 'Full Name', $terminology['group_singular'], $terminology['subgroup_singular'], 'Days Worked', 'Absences', 'Late Days', 'Incomplete Days', 'Regular Hours', 'Late Minutes', 'Undertime Minutes', 'Overtime Hours', 'Rest Day Hours']);
+                SafeCsv::put($output, ['ID Number', 'Full Name', $terminology['group_singular'], $terminology['subgroup_singular'], 'Days Worked', 'Absences', 'Late Days', 'Incomplete Days', 'Regular Hours', 'Late Minutes', 'Undertime Minutes', 'Overtime Hours', 'Rest Day Hours']);
                 foreach ($data['people'] as $row) {
                     $totals = $row['totals'];
-                    fputcsv($output, [$row['person']['person_number'], $row['person']['full_name'], $row['person']['group'], $row['person']['subgroup'], $totals['days_worked'], $totals['absences'], $totals['late_days'], $totals['incomplete_days'], $hours($totals['regular_minutes']), $totals['late_minutes'], $totals['undertime_minutes'], $hours($totals['overtime_minutes']), $hours($totals['rest_day_minutes'])]);
+                    SafeCsv::put($output, [$row['person']['person_number'], $row['person']['full_name'], $row['person']['group'], $row['person']['subgroup'], $totals['days_worked'], $totals['absences'], $totals['late_days'], $totals['incomplete_days'], $hours($totals['regular_minutes']), $totals['late_minutes'], $totals['undertime_minutes'], $hours($totals['overtime_minutes']), $hours($totals['rest_day_minutes'])]);
                 }
             } else {
-                fputcsv($output, ['ID Number', 'Full Name', 'Date', 'Day', 'Shift', 'Time In', 'Time Out', 'Status', 'Regular Hours', 'Late Minutes', 'Undertime Minutes', 'Overtime Hours', 'Rest Day Hours', 'Unpaid Break Minutes', 'Note']);
+                SafeCsv::put($output, ['ID Number', 'Full Name', 'Date', 'Day', 'Shift', 'Time In', 'Time Out', 'Status', 'Regular Hours', 'Late Minutes', 'Undertime Minutes', 'Overtime Hours', 'Rest Day Hours', 'Unpaid Break Minutes', 'Note']);
                 foreach ($data['people'] as $row) {
                     foreach ($row['days'] as $day) {
                         $note = collect([$day['holiday'] ? 'Holiday: '.$day['holiday'] : null, $day['no_time_in'] ? 'No time in' : null, $day['no_time_out'] ? 'No time out' : null, $day['incomplete'] ? 'Hours not counted until the scans are fixed' : null])->filter()->implode('; ');
-                        fputcsv($output, [$row['person']['person_number'], $row['person']['full_name'], $day['date'], $day['day'], $day['shift'], $day['time_in'], $day['time_out'], $day['status'], $hours($day['regular_minutes']), $day['late_minutes'], $day['undertime_minutes'], $hours($day['overtime_minutes']), $hours($day['rest_day_minutes']), $day['break_minutes'], $note]);
+                        SafeCsv::put($output, [$row['person']['person_number'], $row['person']['full_name'], $day['date'], $day['day'], $day['shift'], $day['time_in'], $day['time_out'], $day['status'], $hours($day['regular_minutes']), $day['late_minutes'], $day['undertime_minutes'], $hours($day['overtime_minutes']), $hours($day['rest_day_minutes']), $day['break_minutes'], $note]);
                     }
                 }
             }

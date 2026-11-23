@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\BuildDailyAttendanceReport;
 use App\Services\BuildMonthlyAttendanceReport;
+use App\Support\SafeCsv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,10 +43,10 @@ class AttendanceReportController extends Controller
         return response()->streamDownload(function () use ($data): void {
             $output = fopen('php://output', 'wb');
             $visitsColumn = $data['open_hours'] ? ['Total Visits'] : [];
-            fputcsv($output, ['ID Number', 'Full Name', ...array_column($data['dates'], 'label'), ...$visitsColumn]);
+            SafeCsv::put($output, ['ID Number', 'Full Name', ...array_column($data['dates'], 'label'), ...$visitsColumn]);
             foreach ($data['persons'] as $person) {
                 $visits = $data['open_hours'] ? [$person['total_visits']] : [];
-                fputcsv($output, [$person['person_number'], $person['full_name'], ...array_values($person['attendance']), ...$visits]);
+                SafeCsv::put($output, [$person['person_number'], $person['full_name'], ...array_values($person['attendance']), ...$visits]);
             }
             fclose($output);
         }, "monthly-attendance-{$data['month']}-{$group}{$subgroup}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);

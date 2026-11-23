@@ -5,3 +5,8 @@ vendor
 public/build
 storage/logs
 database/*.sqlite
+scratch
+storage/app/private/*
+storage/app/public/*
+.env.*
+!.env.example

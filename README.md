@@ -23,6 +23,8 @@ docker compose exec app php artisan migrate --force
 docker compose exec app php artisan db:seed
 ```
 
+`.env.example` ships with `APP_DEBUG=false`. For local debugging, set `APP_DEBUG=true` in your own `.env` (never commit `.env`).
+
 Application: http://localhost:8000  
 Vite development server: http://localhost:5173  
 phpMyAdmin (development only): http://localhost:8080  

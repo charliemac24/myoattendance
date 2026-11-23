@@ -25,3 +25,35 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Environment files: keep only the committed templates
+.env.*
+!.env.example
+!.env.testing
+
+# Local scratch work, database dumps and backups
+/scratch
+*.sql
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite-journal
+*.bak
+*.tgz
+*.tar.gz
+*.zip
+
+# Generated caches and logs (storage/ and bootstrap/cache also have their own .gitignore files)
+/storage/logs/*.log
+/bootstrap/cache/*.php
+.phpunit.cache/
+
+# Docker local data (the compose file uses a named volume, this covers bind-mount setups)
+/docker-data
+/.docker
+
+# Editor and Claude local settings
+/.claude/settings.local.json
+/.claude/worktrees
+*.swp
+*~

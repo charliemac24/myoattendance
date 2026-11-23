@@ -18,6 +18,7 @@
     </div>
 
     <div class="people-roster">
+        <p class="field-helper" style="padding:0 4px 8px;">{{ $terminology['group_plural'] }} set to "Anytime (open hours)" do not use schedules.</p>
         <div id="schedules-list"></div>
 
         <div class="empty-state" id="schedules-empty" hidden>

@@ -67,6 +67,7 @@
                     </div>
 
                     <div class="override-notice">
+                        <p><strong>Note:</strong> {{ $terminology['group_plural'] }} set to "Anytime (open hours)" are not listed, because they do not use schedules.</p>
                         <p><strong>Note:</strong> Selecting a specific {{ $terminology['subgroup_singular'] }} overrides the parent {{ strtolower($terminology['group_singular']) }}'s default scheduling rules for those specific members.</p>
                     </div>
                 </div>
@@ -245,7 +246,8 @@
                     headers: { Accept: 'application/json' },
                 });
                 const payload = await response.json();
-                const groups = payload.data || [];
+                // Anytime (open hours) groups never use a schedule, so they are not offered here.
+                const groups = (payload.data || []).filter((group) => group.attendance_mode !== 'open');
 
                 groupList.innerHTML = groups.map((group) => `
                     <button type="button" class="picker-item" data-group-id="${group.id}">

@@ -70,4 +70,16 @@ class IndustryChoicesTest extends TestCase
             $this->actingAs($owner)->get('/subgroups/create')->assertOk()->assertSee($subgroupExample);
         }
     }
+
+    public function test_schedule_pages_explain_that_open_hours_groups_do_not_use_schedules(): void
+    {
+        $organization = Organization::create(['name' => 'Gym', 'type' => 'fitness', 'timezone' => 'Asia/Manila']);
+        $owner = User::create(['organization_id' => $organization->id, 'name' => 'Owner', 'email' => 'gym@schedules.test', 'password' => 'password', 'email_verified_at' => now(), 'role' => 'owner']);
+        $organization->groups()->create(['name' => 'Monthly Unlimited', 'attendance_mode' => 'open']);
+
+        $this->actingAs($owner)->get('/schedules')->assertOk()->assertSee('do not use schedules');
+        $this->actingAs($owner)->get('/schedules/create')->assertOk()->assertSee('do not use schedules');
+        // The picker on Add Schedule hides these groups by reading their check-in mode from this list.
+        $this->actingAs($owner)->getJson('/api/groups?per_page=100')->assertOk()->assertJsonPath('data.0.attendance_mode', 'open');
+    }
 }

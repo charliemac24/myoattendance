@@ -53,7 +53,7 @@
 
                 <div class="plain-field" style="margin-top: 20px;">
                     <label class="plain-field-label" for="subgroup-name">{{ $terminology['subgroup_singular'] }} Name</label>
-                    <input type="text" id="subgroup-name" name="name" class="plain-input" placeholder="e.g. Section A, Evening Shift" required>
+                    <input type="text" id="subgroup-name" name="name" class="plain-input" placeholder="{{ \App\Support\OrganizationTypes::nameExample($user->organization->type, 'subgroup') }}" required>
                 </div>
 
                 <div class="guidance-card" style="margin-top: 20px;">

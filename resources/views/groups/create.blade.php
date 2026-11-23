@@ -38,7 +38,7 @@
             <form id="create-group-form" novalidate>
                 <div class="plain-field">
                     <label class="plain-field-label" for="group-name">{{ $terminology['group_singular'] }} Name</label>
-                    <input type="text" id="group-name" name="name" class="plain-input" placeholder="e.g. Grade 9, Evening Shift" required>
+                    <input type="text" id="group-name" name="name" class="plain-input" placeholder="{{ \App\Support\OrganizationTypes::nameExample($user->organization->type, 'group') }}" required>
                     <p class="field-helper">Use clear, recognizable labels to group attendance logs.</p>
                 </div>
                 @include('groups.partials.mode-fields', ['terminology' => $terminology, 'mode' => $user->organization->defaultGroupMode()])

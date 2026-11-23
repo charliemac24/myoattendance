@@ -35,6 +35,16 @@ final class OrganizationTypes
         'other' => 'Other',
     ];
 
+    /** Example text for the name box when adding a group (a gym calls it a Plan) or a subgroup (a Class). */
+    public static function nameExample(?string $type, string $level): string
+    {
+        return match ([$type, $level]) {
+            ['fitness', 'group'] => 'e.g. Monthly Unlimited, Student Plan, 10-Session Pass',
+            ['fitness', 'subgroup'] => 'e.g. Morning Yoga, Evening Zumba, Boxing Basics',
+            default => $level === 'group' ? 'e.g. Grade 9, Evening Shift' : 'e.g. Section A, Evening Shift',
+        };
+    }
+
     /** Labels for a dropdown: every supported type, plus the organization's current type even when it is hidden. */
     public static function selectableLabels(?string $current = null): array
     {

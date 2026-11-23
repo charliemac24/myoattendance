@@ -59,4 +59,15 @@ class IndustryChoicesTest extends TestCase
         $this->actingAs($owner)->putJson('/api/organization/terminology', $words)->assertOk();
         $this->assertSame(['person_plural' => 'Clients'], $organization->fresh()->terminology);
     }
+
+    public function test_add_plan_and_add_class_pages_show_gym_examples_for_a_gym_and_school_examples_otherwise(): void
+    {
+        foreach (['fitness' => ['Monthly Unlimited', 'Morning Yoga'], 'school' => ['Grade 9', 'Section A']] as $type => [$groupExample, $subgroupExample]) {
+            $organization = Organization::create(['name' => 'Example '.$type, 'type' => $type, 'timezone' => 'Asia/Manila']);
+            $owner = User::create(['organization_id' => $organization->id, 'name' => 'Owner', 'email' => $type.'@example.test', 'password' => 'password', 'email_verified_at' => now(), 'role' => 'owner']);
+
+            $this->actingAs($owner)->get('/groups/create')->assertOk()->assertSee($groupExample);
+            $this->actingAs($owner)->get('/subgroups/create')->assertOk()->assertSee($subgroupExample);
+        }
+    }
 }

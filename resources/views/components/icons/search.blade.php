@@ -1,0 +1,2 @@
+@props(['stroke' => '#4B5563'])
+<svg width="16" height="16" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {{ $attributes }}><path d="M7.11133 1C10.4862 1.00015 13.2217 3.73638 13.2217 7.11133C13.2215 10.4861 10.4861 13.2215 7.11133 13.2217C3.73638 13.2217 1.00015 10.4862 1 7.11133C1 3.73629 3.73629 1 7.11133 1Z" stroke="{{ $stroke }}" stroke-width="2" stroke-linecap="round"/><path d="M14 14L11.5 11.5" stroke="{{ $stroke }}" stroke-width="2" stroke-linecap="round"/></svg>

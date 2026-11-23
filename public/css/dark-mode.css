@@ -1,0 +1,32 @@
+/*
+ * Dark mode. The whole page is inverted (softly, so white becomes a dark grey rather than pure black) and its hues
+ * are rotated back, so every screen keeps its colors and contrast without a second stylesheet. Images, video and
+ * canvases are turned back so photos and QR codes look normal.
+ */
+html[data-theme="dark"] {
+    filter: invert(0.92) hue-rotate(180deg);
+}
+
+html[data-theme="dark"] img,
+html[data-theme="dark"] video,
+html[data-theme="dark"] canvas,
+html[data-theme="dark"] .qr-image {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+@media print {
+    html[data-theme="dark"],
+    html[data-theme="dark"] img,
+    html[data-theme="dark"] video,
+    html[data-theme="dark"] canvas { filter: none; }
+}
+
+/* The light / dark switch in the top bar. */
+.app-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.theme-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 16px; background: #f1f5f9; color: #334155; cursor: pointer; transition: background .15s; }
+.theme-toggle:hover { background: #e2e8f0; }
+.theme-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .theme-icon-sun { display: none; }
+html[data-theme="dark"] .theme-toggle .theme-icon-moon { display: none; }
+html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: block; }

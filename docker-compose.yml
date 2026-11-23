@@ -1,0 +1,50 @@
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes: [".:/var/www/html"]
+    command: sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+  node:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    ports: ["5173:5173"]
+    volumes: [".:/var/www/html"]
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host=0.0.0.0"
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: myo_attendance
+      MYSQL_USER: myo
+      MYSQL_PASSWORD: myo_secret
+      MYSQL_ROOT_PASSWORD: root_secret
+    ports: ["3307:3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    ports: ["8080:80"]
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: myo
+      PMA_PASSWORD: myo_secret
+      UPLOAD_LIMIT: 64M
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+volumes:
+  mysql_data:

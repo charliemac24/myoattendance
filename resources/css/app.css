@@ -41,6 +41,8 @@ button { cursor: pointer; }
 .sa-review-summary p { margin: 0; font-size: 14px; }
 .sa-review-amount { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sa-review-amount strong { font-size: 24px; font-weight: 800; }
+.sa-review-summary .sa-activates { display: inline-flex; align-items: baseline; gap: 6px; width: fit-content; padding: 6px 10px; border-radius: 8px; background: #eef6ff; color: #1e3a8a; }
+.sa-review-summary .sa-activates strong { font-size: 15px; }
 .sa-review-box { padding: 12px 14px; border-radius: 10px; background: #eff6ff; }
 .sa-review-box small { display: block; margin-bottom: 4px; color: #1d4ed8; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .sa-review-box p { margin: 2px 0 0; color: #1e3a8a; font-size: 14px; font-weight: 600; }

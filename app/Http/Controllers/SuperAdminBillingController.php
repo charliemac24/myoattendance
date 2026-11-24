@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bill;
-use App\Models\BillItem;
 use App\Models\OrganizationFeatureRequest;
 use App\Models\Payment;
 use App\Services\BaseSubscriptionService;
@@ -23,6 +22,7 @@ class SuperAdminBillingController extends Controller
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($query) => $query->where('reference_number', 'like', '%'.$request->input('search').'%')->orWhereHas('organization', fn ($organization) => $organization->where('name', 'like', '%'.$request->input('search').'%'))))
             ->latest()->paginate(min($request->integer('per_page', 30), 100))->withQueryString();
+        $payments->getCollection()->each(fn (Payment $payment) => $payment->setAttribute('activates', $activates = $payment->activates())->setAttribute('activates_label', Payment::activatesLabel($activates)));
 
         return response()->json($payments);
     }
@@ -34,6 +34,8 @@ class SuperAdminBillingController extends Controller
 
         return response()->json([
             'payment' => $payment,
+            'activates' => $activates = $payment->activates(),
+            'activates_label' => Payment::activatesLabel($activates),
             'expected_base_amount_minor' => BaseSubscriptionService::MONTHLY_PRICE_MINOR,
             'subscription' => $subscriptions->payload($payment->organization),
             'current_plan' => $currentPlan = $billing->currentPlan($payment->organization),
@@ -53,11 +55,16 @@ class SuperAdminBillingController extends Controller
                 abort(409, 'This payment cannot be approved.');
             }
             $bill = $payment->bill_id ? Bill::query()->with('items')->lockForUpdate()->findOrFail($payment->bill_id) : null;
+            if ($bill && ! in_array($bill->bill_type, Bill::ALL_TYPES, true)) {
+                abort(409, 'This payment is for an old plan and cannot be activated here.');
+            }
             if ($bill && ($bill->organization_id !== $payment->organization_id || $bill->status === Bill::STATUS_PAID || $payment->amount_minor !== $bill->total_minor)) {
                 abort(409, 'The payment does not match the bill or the bill is already paid.');
             }
             $payment->update(['status' => Payment::STATUS_APPROVED, 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'recorded_by' => $request->user()->id]);
-            $coversSms = $bill && $bill->coversSms() && $bill->items->contains('type', BillItem::TYPE_SMS);
+            // One Activate button: the bill the organization paid decides Scan only, Scan + SMS, or SMS on top of Scan.
+            $payment->setRelation('bill', $bill);
+            $coversSms = $payment->activates() !== Payment::ACTIVATES_SCAN;
             $smsRequest = $coversSms
                 ? OrganizationFeatureRequest::query()->where('organization_id', $payment->organization_id)->where('feature', OrganizationFeatureRequest::FEATURE_SMS)->where('status', OrganizationFeatureRequest::STATUS_PENDING)->latest('requested_at')->lockForUpdate()->first()
                 : null;
@@ -92,7 +99,7 @@ class SuperAdminBillingController extends Controller
             return $payment->fresh(['organization', 'submittedBy', 'reviewedBy', 'bill.items']);
         });
 
-        return response()->json(['payment' => $payment]);
+        return response()->json(['payment' => $payment, 'activated' => $activated = $payment->activates(), 'activated_label' => Payment::activatesLabel($activated)]);
     }
 
     public function reject(Request $request, Payment $payment): JsonResponse

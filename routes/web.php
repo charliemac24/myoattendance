@@ -307,6 +307,7 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('api/super-admin'
     Route::get('/billing/payments', [SuperAdminBillingController::class, 'index'])->name('billing.payments.index');
     Route::get('/billing/payments/{payment}', [SuperAdminBillingController::class, 'show'])->name('billing.payments.show');
     Route::post('/billing/payments/{payment}/approve', [SuperAdminBillingController::class, 'approve'])->name('billing.payments.approve');
+    Route::post('/billing/payments/{payment}/activate', [SuperAdminBillingController::class, 'approve'])->name('billing.payments.activate');
     Route::post('/billing/payments/{payment}/reject', [SuperAdminBillingController::class, 'reject'])->name('billing.payments.reject');
     Route::post('/billing/payments/{payment}/request-proof', [SuperAdminBillingController::class, 'requestProof'])->name('billing.payments.request-proof');
     Route::get('/billing/payments/{payment}/proof', [SuperAdminBillingController::class, 'proof'])->name('billing.payments.proof');

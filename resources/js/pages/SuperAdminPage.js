@@ -68,7 +68,7 @@ function planDetail(plan) {
 // Organizations list filters: Scan plan status, SMS status and industry, combined with the search box.
 const ORG_FILTERS = [
     ['plan', 'Scan: all', [['trialing', 'Free trial'], ['active', 'Active'], ['expiring_soon', 'Ends within 7 days'], ['expired', 'Expired'], ['expired_with_sms', 'Expired, had SMS'], ['expired_base_only', 'Expired, Base only'], ['under_review', 'Payment under review']], 'Scan'],
-    ['sms', 'SMS: all', [['on', 'On'], ['scheduled', 'Scheduled'], ['off', 'Off'], ['price_requested', 'Custom price requested']], 'SMS'],
+    ['sms', 'SMS: all', [['on', 'On'], ['scheduled', 'Scheduled'], ['off', 'Off'], ['price_requested', 'Custom price requested'], ['price_estimated', 'Estimated price, not reviewed']], 'SMS'],
     ['type', 'All industries', [['school', 'School'], ['fitness', 'Fitness / Gym'], ['other', 'Other']], 'Industry'],
 ];
 const orgFilterSelects = (filters, setFilters) => ORG_FILTERS.map(([key, allLabel, options, prefix]) => h('select', { key, 'aria-label': prefix, value: filters[key], onChange: (event) => setFilters((current) => ({ ...current, [key]: event.target.value })) },
@@ -320,6 +320,7 @@ export function SuperAdminPage({ user, onAuthenticated }) {
             error && h('div', { className: 'sa-error' }, error),
             tab === 'overview' && dashboard && h(React.Fragment, null,
             dashboard.sms_price_requests > 0 && h('button', { type: 'button', className: 'sa-notice', onClick: () => showOrganizations('', 'price_requested') }, h('strong', null, `Custom SMS price requested: ${dashboard.sms_price_requests}`), h('span', null, dashboard.sms_price_requests === 1 ? 'A school is waiting for you to set its SMS price. Show it' : 'Schools are waiting for you to set their SMS price. Show them'), h(Icon, { name: 'chevronRight' })),
+            dashboard.sms_price_estimates > 0 && h('button', { type: 'button', className: 'sa-notice', onClick: () => showOrganizations('', 'price_estimated') }, h('strong', null, `Estimated SMS price, not yet reviewed: ${dashboard.sms_price_estimates}`), h('span', null, dashboard.sms_price_estimates === 1 ? 'A school\'s SMS price was worked out from its own answers. Check it' : 'These SMS prices were worked out from the schools\' own answers. Check them'), h(Icon, { name: 'chevronRight' })),
             h('div', { className: 'sa-stats' },
                 h(Stat, { label: 'Expiring soon', value: dashboard.expiring_soon, tone: 'amber', hint: 'Scan or SMS ends within 7 days', onClick: () => showOrganizations('expiring_soon') }),
                 h(Stat, { label: 'Expired Base + SMS', value: dashboard.expired_with_sms, tone: 'red', hint: 'Scan expired, had SMS', onClick: () => showOrganizations('expired_with_sms') }),

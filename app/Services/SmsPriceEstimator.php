@@ -59,6 +59,28 @@ class SmsPriceEstimator
     }
 
     /**
+     * Save a school's answers without touching its SMS price, e.g. when it asks MYO Attendance for a custom price.
+     *
+     * @param  list<string>  $texts
+     * @return list<string>
+     */
+    public function storeAnswers(Organization $organization, ?int $people, array $texts, ?string $days): array
+    {
+        $texts = array_values(array_intersect(self::TEXTS, $texts));
+        $organization->update(['sms_estimate_people' => $people, 'sms_estimate_texts' => $texts ?: null, 'sms_estimate_days' => $days]);
+
+        return $texts;
+    }
+
+    /**
+     * Whether the school has said how many people, which texts and which days, so a price can be worked out.
+     */
+    public static function hasAnswers(Organization $organization): bool
+    {
+        return $organization->sms_estimate_people > 0 && $organization->sms_estimate_days !== null && self::textsPerDay($organization->sms_estimate_texts ?? []) > 0;
+    }
+
+    /**
      * Save a school's answers and, unless Super Admin has set the price, make the estimate its SMS price.
      *
      * @param  list<string>  $texts
@@ -66,8 +88,7 @@ class SmsPriceEstimator
      */
     public function saveAnswers(Organization $organization, User $actor, ?int $people, array $texts, ?string $days): array
     {
-        $texts = array_values(array_intersect(self::TEXTS, $texts));
-        $organization->update(['sms_estimate_people' => $people, 'sms_estimate_texts' => $texts ?: null, 'sms_estimate_days' => $days]);
+        $texts = $this->storeAnswers($organization, $people, $texts, $days);
 
         if (! $people || ! $days || self::textsPerDay($texts) === 0) {
             return ['applied' => false, 'amount_minor' => null];

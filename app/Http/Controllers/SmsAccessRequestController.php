@@ -27,10 +27,17 @@ class SmsAccessRequestController extends Controller
     {
         abort_unless($request->user()->organization, 403);
         abort_unless(in_array($request->user()->role, ['owner', 'admin'], true), 403);
-        $data = $request->validate(['activation_mode' => ['nullable', 'string', 'in:after_trial,immediate']]);
+        $data = $request->validate([
+            'activation_mode' => ['nullable', 'string', 'in:after_trial,immediate'],
+            'people' => ['nullable', 'required_with:texts,days', 'integer', 'min:1', 'max:100000'],
+            'texts' => ['nullable', 'required_with:people,days', 'array', 'min:1'],
+            'texts.*' => ['string', 'in:time_in,time_out,late'],
+            'days' => ['nullable', 'required_with:people,texts', 'string', 'in:weekdays,mon_sat,every_day'],
+        ]);
+        $answers = isset($data['people']) ? ['people' => (int) $data['people'], 'texts' => $data['texts'], 'days' => $data['days']] : null;
 
         try {
-            $featureRequest = $service->request($request->user()->organization, $request->user(), $data['activation_mode'] ?? null);
+            $featureRequest = $service->request($request->user()->organization, $request->user(), $data['activation_mode'] ?? null, $answers);
         } catch (\DomainException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
         }

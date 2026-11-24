@@ -13,6 +13,7 @@ use App\Services\BillingService;
 use App\Services\SmsAccessRequestService;
 use App\Services\SmsPricingService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
@@ -66,7 +67,7 @@ class ActivationDemoSeeder extends Seeder
                 $this->paidBaseMonth($school, $owner, $admin, now()->subDays(3));
             }
             if ($username === 'demo-request') {
-                $requests->request($school, $owner);
+                $requests->request($school, $owner, null, ['people' => 350, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays']);
             } elseif ($username !== 'demo-noprice') {
                 $pricing->setPrice($school, $admin, self::DEMO_SMS_PRICE_MINOR, now()->subMonth()->toDateString(), 'Demo SMS price (demo data)');
             }
@@ -107,7 +108,7 @@ class ActivationDemoSeeder extends Seeder
     /**
      * Replaces the expired trial with one approved, paid Base month that started on $paidFrom.
      */
-    private function paidBaseMonth(Organization $school, User $owner, User $admin, \Illuminate\Support\Carbon $paidFrom): void
+    private function paidBaseMonth(Organization $school, User $owner, User $admin, Carbon $paidFrom): void
     {
         $paidUntil = $paidFrom->copy()->addMonthNoOverflow();
         $school->baseSubscription()->update([

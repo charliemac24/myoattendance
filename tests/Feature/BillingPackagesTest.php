@@ -234,7 +234,7 @@ class BillingPackagesTest extends TestCase
 
         $this->assertSame('pay_package', $this->smsAccess($owner)['next_step']);
         $this->actingAs($owner)->getJson('/api/billing')->assertJsonPath('current_plan.sms.state', 'available');
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])
             ->assertStatus(409)->assertJsonPath('message', 'Your SMS price is already set. Choose Base + SMS on the Billing page to turn SMS on.');
 
         $this->travelTo('2027-02-06 01:00:00');
@@ -246,7 +246,7 @@ class BillingPackagesTest extends TestCase
     {
         $owner = $this->owner('active', smsPricing: false);
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_NEXT_PAYMENT);
         $this->assertSame('waiting_for_price', $this->smsAccess($owner)['next_step']);
     }
@@ -255,7 +255,7 @@ class BillingPackagesTest extends TestCase
     {
         $owner = $this->owner(smsPricing: false);
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_IMMEDIATE);
     }
 
@@ -487,12 +487,12 @@ class BillingPackagesTest extends TestCase
     public function test_trial_school_can_change_when_sms_starts_until_it_is_approved(): void
     {
         $owner = $this->owner(smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial'])->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial', ...self::SMS_ANSWERS])->assertCreated();
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertOk()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertOk()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_IMMEDIATE);
         $this->actingAs($owner)->getJson('/api/organization/sms/access')->assertJsonPath('sms.activation_mode', 'immediate')->assertJsonPath('sms.in_trial', true);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertOk()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertOk()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_IMMEDIATE);
         $this->assertDatabaseCount('organization_feature_requests', 1);
     }
@@ -501,7 +501,7 @@ class BillingPackagesTest extends TestCase
     {
         $owner = $this->owner();
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_IMMEDIATE);
         $this->actingAs($owner)->getJson('/api/billing?type=package')->assertOk()
             ->assertJsonPath('current_plan.sms.state', 'price_ready')
@@ -519,7 +519,7 @@ class BillingPackagesTest extends TestCase
             ->assertJsonPath('current_bill.billing_period_start', '2026-11-10T00:00:00.000000Z');
         $this->assertDatabaseCount('organization_feature_requests', 0);
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertCreated()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated()
             ->assertJsonPath('request.activation_mode', 'immediate');
         $this->actingAs($owner)->postJson('/api/billing/start-choice', ['choice' => 'after_trial'])->assertOk();
         $this->assertSame('after_trial', $owner->organization->featureRequests()->firstOrFail()->activation_mode);
@@ -547,16 +547,16 @@ class BillingPackagesTest extends TestCase
     public function test_paid_school_cannot_switch_its_request_to_trial_timing(): void
     {
         $owner = $this->owner('active', smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated();
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertOk()
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertOk()
             ->assertJsonPath('request.activation_mode', OrganizationFeatureRequest::ACTIVATION_NEXT_PAYMENT);
     }
 
     public function test_start_right_away_base_plus_sms_bill_starts_today_for_a_trial_school(): void
     {
         $owner = $this->owner(smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated();
         $this->actingAs($this->superAdmin())->putJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms-pricing', ['sms_monthly_price' => '499'])->assertOk();
 
         $bill = $this->actingAs($owner)->getJson('/api/billing?type=package')->assertOk()
@@ -573,7 +573,7 @@ class BillingPackagesTest extends TestCase
     public function test_start_right_away_base_payment_starts_paid_base_today(): void
     {
         $owner = $this->owner(smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated();
 
         $bill = $this->actingAs($owner)->getJson('/api/billing?type=base')->assertOk()
             ->assertJsonPath('plan_change.message', 'Starts paid Base as soon as this payment is approved, which ends your free trial early (you chose "Right away"). Covers Nov 10, 2026 to Dec 9, 2026 (1 month). This payment is for Base only. Your SMS price is not ready yet. SMS is added once Base + SMS is paid and approved.')
@@ -595,7 +595,7 @@ class BillingPackagesTest extends TestCase
     public function test_start_after_trial_payments_start_when_the_trial_ends(): void
     {
         $owner = $this->owner(smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial'])->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial', ...self::SMS_ANSWERS])->assertCreated();
 
         $this->actingAs($owner)->getJson('/api/billing?type=base')->assertOk()
             ->assertJsonPath('plan_change.message', 'Starts paid Base on Nov 20, 2026, when your free trial ends (you chose "After my free trial ends"). Covers Nov 20, 2026 to Dec 19, 2026 (1 month). This payment is for Base only. Your SMS price is not ready yet. SMS is added once Base + SMS is paid and approved.');
@@ -616,12 +616,12 @@ class BillingPackagesTest extends TestCase
     public function test_changing_the_choice_after_paying_moves_the_submitted_bill_and_approval_follows_it(): void
     {
         $owner = $this->owner(smsPricing: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial'])->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'after_trial', ...self::SMS_ANSWERS])->assertCreated();
         $bill = $this->billFor($owner, Bill::TYPE_BASE);
         $paymentId = $this->pay($owner, $bill, 'SWITCH-CHOICE')->json('payment.id');
         $this->assertSame('2026-11-20', substr($bill['billing_period_start'], 0, 10));
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertOk();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertOk();
         $this->assertSame('2026-11-10', Bill::findOrFail($bill['id'])->billing_period_start->toDateString());
         $this->assertSame(BaseSubscriptionService::MONTHLY_PRICE_MINOR, Bill::findOrFail($bill['id'])->total_minor);
 

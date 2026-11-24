@@ -42,7 +42,7 @@ class SmsCustomPriceRequestTest extends TestCase
         $owner = $this->expiredSchool();
         $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertSuccessful();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertSuccessful();
         $this->assertSame(1, OrganizationFeatureRequest::query()->where('organization_id', $owner->organization_id)->where('status', 'pending')->count());
         $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('sms_price_requests', 1);
         $this->actingAs($owner)->getJson('/api/billing')->assertJsonPath('available_types.package', false);
@@ -68,11 +68,41 @@ class SmsCustomPriceRequestTest extends TestCase
         $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 30, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertSuccessful();
         $this->assertSame(SmsPricingAgreement::SOURCE_ESTIMATE, SmsPricingAgreement::query()->where('organization_id', $owner->organization_id)->value('source'));
 
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertSuccessful();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertSuccessful();
 
         $priced = $this->expiredSchool();
         $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
         $this->actingAs($admin)->putJson('/api/super-admin/organizations/'.$priced->organization_id.'/sms-pricing', ['sms_monthly_price' => '650'])->assertOk();
-        $this->actingAs($priced)->postJson('/api/organization/sms/access/request')->assertStatus(409);
+        $this->actingAs($priced)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertStatus(409);
+    }
+
+    public function test_a_custom_price_request_needs_people_texts_and_days(): void
+    {
+        $owner = $this->expiredSchool();
+
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertUnprocessable()->assertJsonValidationErrors('people');
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['people' => 30])->assertUnprocessable()->assertJsonValidationErrors(['texts', 'days']);
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['people' => 30, 'texts' => [], 'days' => 'weekdays'])->assertUnprocessable();
+
+        $this->assertSame(0, OrganizationFeatureRequest::query()->where('organization_id', $owner->organization_id)->count());
+    }
+
+    public function test_the_answers_reach_super_admin_with_an_estimate_but_do_not_set_a_price(): void
+    {
+        config(['services.sms_estimate.price_per_text' => 0.5, 'services.sms_estimate.round_to' => 50]);
+        $owner = $this->expiredSchool();
+        $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
+
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['people' => 350, 'texts' => ['late', 'time_out'], 'days' => 'mon_sat'])->assertCreated();
+
+        $this->assertSame(0, SmsPricingAgreement::query()->where('organization_id', $owner->organization_id)->count());
+        $this->actingAs($owner)->getJson('/api/billing')->assertJsonPath('available_types.package', false);
+        // 350 people × 2 texts × 26 days × PHP 0.50 = PHP 9,100.
+        $this->actingAs($admin)->getJson('/api/super-admin/organizations/'.$owner->organization_id)->assertOk()
+            ->assertJsonPath('organization.sms_estimate.people', 350)
+            ->assertJsonPath('organization.sms_estimate.texts', ['time_out', 'late'])
+            ->assertJsonPath('organization.sms_estimate.texts_per_day', 2)
+            ->assertJsonPath('organization.sms_estimate.days', 'mon_sat')
+            ->assertJsonPath('organization.sms_estimate.amount_minor', 910000);
     }
 }

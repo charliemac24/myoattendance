@@ -81,7 +81,7 @@ class BillingEndToEndTest extends TestCase
         $this->actingAs($owner)->postJson('/api/billing/start-choice', ['choice' => 'immediate'])->assertOk();
         $this->assertSame('2026-11-10', substr($this->bill($owner)['billing_period_start'], 0, 10));
         $this->actingAs($owner)->postJson('/api/billing/start-choice', ['choice' => 'tomorrow'])->assertStatus(422)->assertJsonValidationErrors('choice');
-        $request = $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertCreated()->json('request');
+        $request = $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated()->json('request');
         $this->assertSame(OrganizationFeatureRequest::ACTIVATION_IMMEDIATE, $request['activation_mode']);
         $this->actingAs($this->admin())->getJson('/api/super-admin/billing/payments')->assertOk();
     }
@@ -146,7 +146,7 @@ class BillingEndToEndTest extends TestCase
     public function test_base_plus_sms_price_change_and_approval_cover_both_features(): void
     {
         $owner = $this->owner(price: false);
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request')->assertCreated();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated();
         $this->actingAs($this->admin())->putJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms-pricing', ['sms_monthly_price' => '499'])->assertOk();
         $bill = $this->bill($owner, Bill::TYPE_PACKAGE);
         $this->assertSame(349800, $bill['total_minor']);

@@ -181,15 +181,24 @@ class SuperAdminOrganizationController extends Controller
     /**
      * The school's own SMS answers, for showing next to an estimated price.
      *
-     * @return array{people: ?int, texts_per_day: int, days: ?string}|null
+     * @return array{people: int, texts: list<string>, texts_per_day: int, days: ?string, amount_minor: ?int}|null
      */
     public static function estimateAnswers(Organization $organization): ?array
     {
-        return $organization->sms_estimate_people ? [
+        if (! $organization->sms_estimate_people) {
+            return null;
+        }
+        $texts = $organization->sms_estimate_texts ?? [];
+
+        return [
             'people' => $organization->sms_estimate_people,
-            'texts_per_day' => SmsPriceEstimator::textsPerDay($organization->sms_estimate_texts ?? []),
+            'texts' => $texts,
+            'texts_per_day' => SmsPriceEstimator::textsPerDay($texts),
             'days' => $organization->sms_estimate_days,
-        ] : null;
+            'amount_minor' => SmsPriceEstimator::hasAnswers($organization)
+                ? app(SmsPriceEstimator::class)->estimateMinor($organization->sms_estimate_people, $texts, $organization->sms_estimate_days)
+                : null,
+        ];
     }
 
     /** Days ahead that count as "expiring soon" on the dashboard. */

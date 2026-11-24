@@ -148,7 +148,7 @@ class SmsPriceEstimateTest extends TestCase
         $admin = $this->superAdmin();
         $this->actingAs($admin)->getJson('/api/super-admin/billing/payments/'.$paymentId)->assertOk()
             ->assertJsonPath('sms_price_source', 'estimate')
-            ->assertJsonPath('sms_estimate', ['people' => 350, 'texts_per_day' => 2, 'days' => 'mon_sat']);
+            ->assertJsonPath('sms_estimate.people', 350)->assertJsonPath('sms_estimate.texts_per_day', 2)->assertJsonPath('sms_estimate.days', 'mon_sat');
         $this->actingAs($admin)->getJson('/api/super-admin/organizations/'.$owner->organization_id)->assertOk()
             ->assertJsonPath('organization.sms_pricing.source', 'estimate')
             ->assertJsonPath('organization.sms_estimate.people', 350);

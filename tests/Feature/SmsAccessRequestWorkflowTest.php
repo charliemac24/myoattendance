@@ -33,40 +33,40 @@ class SmsAccessRequestWorkflowTest extends TestCase
     {
         foreach (['owner', 'admin'] as $role) {
             $user = $this->tenant($role);
-            $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertCreated()->assertJsonPath('request.status', 'pending');
+            $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated()->assertJsonPath('request.status', 'pending');
             $this->assertDatabaseHas('organization_feature_requests', ['organization_id' => $user->organization_id, 'requested_by' => $user->id, 'status' => 'pending']);
         }
 
         foreach (['supervisor', 'scanner'] as $role) {
             $user = $this->tenant($role);
-            $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertForbidden();
+            $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertForbidden();
         }
     }
 
     public function test_requests_are_idempotent_active_access_is_blocked_and_expired_access_can_request_again(): void
     {
         $user = $this->tenant();
-        $first = $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertCreated()->json('request.id');
-        $second = $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertOk()->json('request.id');
+        $first = $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated()->json('request.id');
+        $second = $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertOk()->json('request.id');
         $this->assertSame($first, $second);
         $this->assertDatabaseCount('organization_feature_requests', 1);
 
         FeatureEntitlement::create(['organization_id' => $user->organization_id, 'feature' => 'sms', 'enabled' => true, 'expires_at' => '2026-09-01']);
-        $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertOk();
+        $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertOk();
         $this->assertDatabaseCount('organization_feature_requests', 1);
 
         OrganizationFeatureRequest::whereKey($first)->update(['status' => 'rejected']);
-        $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertCreated();
+        $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated();
         $this->assertDatabaseCount('organization_feature_requests', 2);
         FeatureEntitlement::where('organization_id', $user->organization_id)->update(['expires_at' => '2026-12-31']);
         OrganizationFeatureRequest::where('organization_id', $user->organization_id)->where('status', 'pending')->update(['status' => 'approved']);
-        $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertStatus(409);
+        $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertStatus(409);
     }
 
     public function test_super_admin_can_approve_and_activate_in_one_workflow(): void
     {
         $user = $this->tenant();
-        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request')->json('request.id');
+        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->json('request.id');
         $admin = $this->admin();
 
         $this->actingAs($admin)->postJson('/api/super-admin/sms-requests/'.$requestId.'/approve', [
@@ -89,7 +89,7 @@ class SmsAccessRequestWorkflowTest extends TestCase
     {
         $user = $this->tenant();
         app(BaseSubscriptionService::class)->createTrial($user->organization);
-        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request')->json('request.id');
+        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->json('request.id');
         $admin = $this->admin();
 
         $this->actingAs($admin)->putJson('/api/super-admin/sms-requests/'.$requestId.'/pricing', [
@@ -114,7 +114,7 @@ class SmsAccessRequestWorkflowTest extends TestCase
         $user = $this->tenant();
         app(BaseSubscriptionService::class)->createTrial($user->organization);
         $admin = $this->admin();
-        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate'])->assertCreated()->json('request.id');
+        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertCreated()->json('request.id');
         $this->assertDatabaseHas('organization_feature_requests', ['id' => $requestId, 'activation_mode' => 'immediate']);
         $this->actingAs($admin)->putJson('/api/super-admin/sms-requests/'.$requestId.'/pricing', ['sms_monthly_price' => '499.00', 'effective_from' => now()->toDateString()])->assertOk();
         $this->actingAs($admin)->postJson('/api/super-admin/sms-requests/'.$requestId.'/send-quote')->assertOk();
@@ -133,13 +133,13 @@ class SmsAccessRequestWorkflowTest extends TestCase
     public function test_rejection_preserves_history_and_allows_request_again(): void
     {
         $user = $this->tenant();
-        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request')->json('request.id');
+        $requestId = $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->json('request.id');
         $admin = $this->admin();
         $this->actingAs($admin)->postJson('/api/super-admin/sms-requests/'.$requestId.'/reject', ['reason' => 'Payment not received.'])->assertOk()->assertJsonPath('request.status', 'rejected');
         $this->assertDatabaseCount('payments', 0);
         $this->assertDatabaseCount('feature_entitlements', 0);
         $this->actingAs($user)->getJson('/api/organization/sms/access')->assertOk()->assertJsonPath('sms.request_status', 'rejected')->assertJsonPath('sms.request_reason', 'Payment not received.');
-        $this->actingAs($user)->postJson('/api/organization/sms/access/request')->assertCreated();
+        $this->actingAs($user)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertCreated();
         $this->assertDatabaseCount('organization_feature_requests', 2);
     }
 
@@ -147,7 +147,7 @@ class SmsAccessRequestWorkflowTest extends TestCase
     {
         $userA = $this->tenant();
         $userB = $this->tenant();
-        $requestId = $this->actingAs($userA)->postJson('/api/organization/sms/access/request')->json('request.id');
+        $requestId = $this->actingAs($userA)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->json('request.id');
         $this->actingAs($userB)->getJson('/api/super-admin/sms-requests/'.$requestId)->assertForbidden();
         $this->actingAs($userB)->postJson('/api/super-admin/sms-requests/'.$requestId.'/approve', [])->assertForbidden();
         $this->actingAs($this->admin())->getJson('/api/super-admin/sms-requests?status=pending')->assertOk()->assertJsonPath('data.0.id', $requestId);

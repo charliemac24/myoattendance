@@ -522,13 +522,68 @@ function smsLine(text) {
     els.smsRequest.appendChild(p);
 }
 
-async function requestSms(activationMode, buttons) {
+/**
+ * The questions MYO Attendance needs to set a custom SMS price: how many people, which texts, which days.
+ * All three are required, and the school's earlier answers are filled in.
+ */
+function customPriceForm(onCancel) {
+    const saved = lastBilling?.sms_estimate || {};
+    const texts = saved.texts?.length ? saved.texts : ['time_in', 'time_out'];
+    const form = document.createElement('form');
+    form.className = 'billing-estimate-form';
+    form.dataset.smsCustomForm = '';
+    form.innerHTML = `
+        <p class="billing-renewal-choice-status">Tell us how you'll use SMS so we can work out your price.</p>
+        <label class="billing-estimate-field">How many people will receive SMS?
+            <input type="number" min="1" max="100000" required data-custom="people" placeholder="e.g. 350">
+            <span class="billing-estimate-hint">Usually your number of students or employees.</span>
+        </label>
+        <div class="billing-estimate-group"><span class="billing-renewal-choice-title">Which texts?</span>
+            <label><input type="checkbox" data-custom="text" value="time_in"> Time In</label>
+            <label><input type="checkbox" data-custom="text" value="time_out"> Time Out</label>
+            <label><input type="checkbox" data-custom="text" value="late"> Late (replaces Time In)</label>
+        </div>
+        <div class="billing-estimate-group"><span class="billing-renewal-choice-title">Which days?</span>
+            <label><input type="radio" name="billing-custom-days" data-custom="days" value="weekdays" required> Weekdays</label>
+            <label><input type="radio" name="billing-custom-days" data-custom="days" value="mon_sat"> Mon–Sat</label>
+            <label><input type="radio" name="billing-custom-days" data-custom="days" value="every_day"> Every day</label>
+        </div>
+        <p class="billing-estimate-saved" data-custom="status" role="status"></p>
+        <div class="billing-custom-actions">
+            <button type="submit" class="billing-link-btn" data-custom="send">Send request</button>
+            <button type="button" class="billing-link-btn" data-custom="cancel">Cancel</button>
+        </div>`;
+    form.querySelector('[data-custom="people"]').value = saved.people || '';
+    form.querySelectorAll('[data-custom="text"]').forEach((input) => { input.checked = texts.includes(input.value); });
+    form.querySelectorAll('[data-custom="days"]').forEach((input) => { input.checked = input.value === (saved.days || 'weekdays'); });
+    const status = form.querySelector('[data-custom="status"]');
+    form.querySelector('[data-custom="cancel"]').addEventListener('click', () => { form.remove(); onCancel(); });
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const answers = {
+            people: Number(form.querySelector('[data-custom="people"]').value) || 0,
+            texts: [...form.querySelectorAll('[data-custom="text"]:checked')].map((input) => input.value),
+            days: form.querySelector('[data-custom="days"]:checked')?.value,
+        };
+        if (answers.people < 1 || !answers.texts.length || !answers.days) {
+            status.textContent = 'Enter the number of people and pick at least one text and the days.';
+            return;
+        }
+        // No start choice is sent: trial schools keep the one they picked above, others start with their next payment.
+        requestSms(undefined, [...form.querySelectorAll('button')], answers, status);
+    });
+
+    return form;
+}
+
+async function requestSms(activationMode, buttons, answers = {}, statusEl = null) {
     buttons.forEach((b) => { b.disabled = true; });
     try {
-        await post('/api/organization/sms/access/request', activationMode ? { activation_mode: activationMode } : {});
+        await post('/api/organization/sms/access/request', { ...(activationMode ? { activation_mode: activationMode } : {}), ...answers });
         await load();
     } catch (error) {
-        smsLine(error.message || 'Unable to send your SMS request.');
+        const message = error.message || 'Unable to send your SMS request.';
+        if (statusEl) statusEl.textContent = message; else smsLine(message);
         buttons.forEach((b) => { b.disabled = false; });
     }
 }
@@ -569,8 +624,10 @@ function renderSmsRequest(sms) {
             button.className = 'billing-link-btn';
             button.dataset.smsCustomRequest = '';
             button.textContent = 'Request a custom SMS price';
-            // No start choice is sent: trial schools keep the one they picked above, others start with their next payment.
-            button.addEventListener('click', () => requestSms(undefined, [button]));
+            button.addEventListener('click', () => {
+                button.hidden = true;
+                els.smsRequest.appendChild(customPriceForm(() => { button.hidden = false; }));
+            });
             els.smsRequest.appendChild(button);
         }
     }

@@ -4308,6 +4308,8 @@
 .billing-estimate-actions .billing-sms-request-submit { width: auto; padding: 8px 16px; font-size: 13px; }
 .billing-sms-estimate .billing-link-btn { padding: 0; border: 0; background: none; color: #2563eb; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .billing-estimate-saved { margin: 0; min-height: 16px; color: #15803d; font-size: 12px; font-weight: 600; }
+.billing-estimate-form { display: grid; gap: 10px; margin-top: 6px; }
+.billing-custom-actions { display: flex; gap: 16px; }
 
 /* =====================================================================
    Desktop layout (1024px and wider). Phones and tablets are unchanged:

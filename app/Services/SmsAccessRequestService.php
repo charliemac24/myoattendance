@@ -8,15 +8,19 @@ use App\Models\Payment;
 use App\Models\SmsPricingAgreement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SmsAccessRequestService
 {
     /**
      * Request SMS, or (for a school still on its trial) change when an existing request should start.
+     * A new request needs the school's answers (people, texts, days) so MYO Attendance can work out its price.
+     *
+     * @param  array{people: int, texts: list<string>, days: string}|null  $answers
      */
-    public function request(Organization $organization, User $actor, ?string $activationMode = null): OrganizationFeatureRequest
+    public function request(Organization $organization, User $actor, ?string $activationMode = null, ?array $answers = null): OrganizationFeatureRequest
     {
-        return DB::transaction(function () use ($organization, $actor, $activationMode): OrganizationFeatureRequest {
+        return DB::transaction(function () use ($organization, $actor, $activationMode, $answers): OrganizationFeatureRequest {
             $organization = Organization::query()->whereKey($organization->id)->lockForUpdate()->firstOrFail();
             $pending = $organization->featureRequests()->where('feature', OrganizationFeatureRequest::FEATURE_SMS)
                 ->where('status', OrganizationFeatureRequest::STATUS_PENDING)->lockForUpdate()->first();
@@ -42,6 +46,7 @@ class SmsAccessRequestService
             if ($currentPlan['sms']['state'] === 'available' && $priceSetByAdmin && ! $currentPlan['in_trial']) {
                 throw new \DomainException('Your SMS price is already set. Choose Base + SMS on the Billing page to turn SMS on.');
             }
+            $this->saveAnswers($organization, $actor, $answers);
             // Only schools still on their free trial choose when their paid plan starts; the request follows that choice.
             if (! $currentPlan['in_trial']) {
                 $activationMode = OrganizationFeatureRequest::ACTIVATION_NEXT_PAYMENT;
@@ -59,6 +64,27 @@ class SmsAccessRequestService
                 'activation_mode' => $activationMode,
             ]);
         });
+    }
+
+    /**
+     * Keep the answers that come with a custom price request. A price estimated from older answers follows the new ones;
+     * otherwise the price stays unset until MYO Attendance sets it.
+     *
+     * @param  array{people: int, texts: list<string>, days: string}|null  $answers
+     */
+    private function saveAnswers(Organization $organization, User $actor, ?array $answers): void
+    {
+        if ($answers !== null) {
+            $estimator = app(SmsPriceEstimator::class);
+            $source = $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->latest('effective_from')->value('source');
+            $source === SmsPricingAgreement::SOURCE_ESTIMATE
+                ? $estimator->saveAnswers($organization, $actor, $answers['people'], $answers['texts'], $answers['days'])
+                : $estimator->storeAnswers($organization, $answers['people'], $answers['texts'], $answers['days']);
+        }
+
+        if (! SmsPriceEstimator::hasAnswers($organization)) {
+            throw ValidationException::withMessages(['people' => 'Tell us how many people will receive SMS, which texts, and which days, so we can work out your price.']);
+        }
     }
 
     public function approve(OrganizationFeatureRequest $request, User $actor, array $data): OrganizationFeatureRequest

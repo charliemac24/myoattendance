@@ -31,8 +31,8 @@ function Icon({ name, color = 'currentColor', className }) {
     return h('span', { className: 'sa-icon' + (className ? ' ' + className : ''), dangerouslySetInnerHTML: { __html: svg[name](color) } });
 }
 
-function Status({ value }) {
-    return h('span', { className: 'sa-status sa-status--' + value }, value);
+function Status({ value, tone }) {
+    return h('span', { className: 'sa-status sa-status--' + (tone || value) }, value);
 }
 
 const STAT_ICON = { blue: 'grid', green: 'check', amber: 'clock' };
@@ -40,6 +40,16 @@ const STAT_ICON = { blue: 'grid', green: 'check', amber: 'clock' };
 function Stat({ label, value, tone }) {
     return h('div', { className: 'sa-stat' }, h('div', { className: 'sa-stat-icon sa-stat-icon--' + tone }, h(Icon, { name: STAT_ICON[tone] || 'grid' })), h('div', null, h('p', { className: 'sa-stat-label' }, label), h('p', { className: 'sa-stat-value' }, value)));
 }
+
+const planStatusText = (plan) => ({ trialing: 'Free trial', active: 'Active', expired: 'Expired' })[plan?.status] || (plan?.status || 'Unknown');
+const planDateText = (plan) => !plan ? ''
+    : plan.status === 'expired' ? 'Not paid'
+    : plan.base_paid_through ? 'Paid through ' + formatDate(plan.base_paid_through)
+    : plan.trial_ends_at ? 'Trial ends ' + formatDate(plan.trial_ends_at) : '';
+const smsStatusText = (sms) => sms?.state === 'on' ? 'On' : sms?.state === 'scheduled' ? 'Scheduled' : 'Off';
+const smsDateText = (sms, resumableUntil) => sms?.state === 'on' ? (sms.ends_at ? 'Until ' + formatDate(sms.ends_at) : 'No end date')
+    : sms?.state === 'scheduled' ? 'Starts ' + formatDate(sms.starts_at) + (sms.ends_at ? ', until ' + formatDate(sms.ends_at) : '')
+    : resumableUntil ? 'Turned off, paid until ' + formatDate(resumableUntil) : 'Not paid';
 
 function planDetail(plan) {
     if (!plan) return '';
@@ -254,7 +264,9 @@ function Drawer({ organization, onClose, onRefresh }) {
         mode === 'resume' ? h('form', { className: 'sa-form', onSubmit: submit }, h('h3', null, 'Turn SMS back on?'), h('p', null, `SMS turns on now until ${formatDate(organization.sms_resumable_until)}, the end of the SMS time the school already paid for. No new payment is needed.`), h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving }, saving ? 'Turning on…' : 'Turn SMS back on'))) :
         h('form', { className: 'sa-form', onSubmit: submit }, h('h3', null, 'Turn SMS off now?'), h('p', null, `SMS texts to parents stop right away${organization.sms_expires_at ? ' (it was paid through ' + formatDate(organization.sms_expires_at) + ')' : ''}. Scan and attendance keep working. Payments are not changed or refunded. To turn SMS back on, press Activate on a new SMS payment in Payments.`), h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button sa-button--danger' }, 'Disable SMS')));
     const details = h(React.Fragment, null,
-        h('div', { className: 'sa-detail-status' }, h(Status, { value: organization.sms_access_status }), h('span', null, organization.sms_expires_at ? 'Through ' + formatDate(organization.sms_expires_at) : 'No expiration')),
+        // Scan (Base) and SMS are separate: show each one's real state and end date.
+        h('div', { className: 'sa-detail-status', style: { justifyContent: 'flex-start', gap: '10px', marginBottom: '8px' } }, h('strong', { style: { width: '44px', color: '#374151' } }, 'Scan'), h(Status, { value: planStatusText(organization.current_plan), tone: { trialing: 'scheduled', active: 'active' }[organization.current_plan?.status] || 'expired' }), h('span', null, planDateText(organization.current_plan))),
+        h('div', { className: 'sa-detail-status', style: { justifyContent: 'flex-start', gap: '10px', marginBottom: '20px' } }, h('strong', { style: { width: '44px', color: '#374151' } }, 'SMS'), h(Status, { value: smsStatusText(organization.current_plan?.sms), tone: { on: 'active', scheduled: 'scheduled' }[organization.current_plan?.sms?.state] || 'disabled' }), h('span', null, smsDateText(organization.current_plan?.sms, organization.sms_resumable_until))),
         h('div', { className: 'sa-detail-grid' },
             h('div', null, h('small', null, 'Owner'), h('strong', null, organization.owner?.name || 'Not assigned'), h('span', null, organization.owner?.email || '')),
             h('div', null, h('small', null, 'Users'), h('strong', null, organization.users_count || 0)),

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\NewSignupAlert;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\AdminAlertService;
 use App\Services\BaseSubscriptionService;
 use App\Services\SmsPriceEstimator;
 use App\Services\TurnstileService;
@@ -74,6 +76,7 @@ class AuthController extends Controller
         });
 
         event(new Registered($user));
+        app(AdminAlertService::class)->send(new NewSignupAlert($user->organization, $user));
         Auth::login($user);
         $request->session()->regenerate();
 

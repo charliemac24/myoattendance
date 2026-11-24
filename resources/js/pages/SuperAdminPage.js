@@ -313,6 +313,13 @@ export function SuperAdminPage({ user, onAuthenticated }) {
     const loadPayments = async () => { setPaymentsLoading(true); try { const result = await get(api('/billing/payments?status=' + paymentStatus + '&search=' + encodeURIComponent(paymentSearch))); setPayments(result.data || []); } catch (caught) { setError(caught.message); } finally { setPaymentsLoading(false); } };
     const refresh = async () => { await Promise.all([loadDashboard(), loadOrganizations(), loadPayments()]); if (selected) await select(selected.id); };
     useEffect(() => { loadDashboard(); loadOrganizations(); loadPayments(); }, []);
+    // Links in super admin alert emails: /super-admin?payment=ID opens that payment, ?organization=ID opens that school.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('payment')) { setTab('payments'); setReviewPayment(Number(params.get('payment'))); }
+        if (params.get('organization')) { setTab('organizations'); select(params.get('organization')); }
+        if (params.has('payment') || params.has('organization')) window.history.replaceState(null, '', window.location.pathname);
+    }, []);
     useEffect(() => { const timer = setTimeout(loadOrganizations, 250); return () => clearTimeout(timer); }, [search, filters.plan, filters.sms, filters.type]);
     useEffect(() => { const timer = setTimeout(loadPayments, 250); return () => clearTimeout(timer); }, [paymentStatus, paymentSearch]);
     const signOut = async () => { await logout(); onAuthenticated(null); };

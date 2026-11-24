@@ -52,6 +52,13 @@ return [
         'round_to' => env('SMS_ESTIMATE_ROUND_TO', '50'),
     ],
 
+    // Emails to super admin about payments to review, SMS price requests and new sign-ups.
+    // Off by default; ALERT_EMAIL_TO is comma-separated and falls back to every super admin's email.
+    'admin_alerts' => [
+        'enabled' => (bool) env('ALERT_EMAILS', false),
+        'to' => env('ALERT_EMAIL_TO'),
+    ],
+
     'turnstile' => [
         'site_key' => env('TURNSTILE_SITE_KEY'),
         'secret_key' => env('TURNSTILE_SECRET_KEY'),

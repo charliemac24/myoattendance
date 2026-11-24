@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PaymentSubmittedAlert;
 use App\Models\Bill;
 use App\Models\FeatureEntitlement;
 use App\Models\Organization;
 use App\Models\Payment;
 use App\Models\SmsPricingAgreement;
+use App\Services\AdminAlertService;
 use App\Services\BaseSubscriptionService;
 use App\Services\BillingService;
 use App\Services\SmsPriceEstimator;
@@ -168,6 +170,8 @@ class BillingController extends Controller
 
             return $payment;
         });
+
+        app(AdminAlertService::class)->send(new PaymentSubmittedAlert($payment));
 
         return response()->json(['message' => 'Payment submitted for review.', 'payment' => $payment->makeHidden('proof_path')], 201);
     }

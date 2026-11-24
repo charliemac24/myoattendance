@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\SmsPriceRequestedAlert;
 use App\Models\OrganizationFeatureRequest;
+use App\Services\AdminAlertService;
 use App\Services\BaseSubscriptionService;
 use App\Services\BillingService;
 use App\Services\FeatureEntitlementService;
@@ -23,7 +25,7 @@ class SmsAccessRequestController extends Controller
         return response()->json(['subscription' => $subscriptions->payload($organization), 'sms' => ['access' => $access, 'starts_at' => $entitlement?->starts_at, 'expires_at' => $entitlement?->expires_at, 'request_status' => $latest?->status, 'requested_at' => $latest?->requested_at, 'quote_sent_at' => $latest?->quote_sent_at, 'activation_mode' => $latest?->activation_mode, 'request_reason' => $latest?->status === OrganizationFeatureRequest::STATUS_REJECTED ? $latest->notes : null, 'pricing' => $organization->smsPricingAgreements()->where('status', 'active')->latest('effective_from')->first(), 'active_people_count' => $organization->persons()->where('is_active', true)->count(), 'in_trial' => ($plan = $billing->currentPlan($organization))['in_trial'], 'next_step' => $billing->smsNextStep($plan)]]);
     }
 
-    public function store(Request $request, SmsAccessRequestService $service): JsonResponse
+    public function store(Request $request, SmsAccessRequestService $service, AdminAlertService $alerts): JsonResponse
     {
         abort_unless($request->user()->organization, 403);
         abort_unless(in_array($request->user()->role, ['owner', 'admin'], true), 403);
@@ -40,6 +42,10 @@ class SmsAccessRequestController extends Controller
             $featureRequest = $service->request($request->user()->organization, $request->user(), $data['activation_mode'] ?? null, $answers);
         } catch (\DomainException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
+        }
+
+        if ($featureRequest->wasRecentlyCreated) {
+            $alerts->send(new SmsPriceRequestedAlert($request->user()->organization->fresh(), $request->user()->name));
         }
 
         return response()->json(['request' => $featureRequest], $featureRequest->wasRecentlyCreated ? 201 : 200);

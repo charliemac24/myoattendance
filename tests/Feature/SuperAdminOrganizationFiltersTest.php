@@ -89,4 +89,48 @@ class SuperAdminOrganizationFiltersTest extends TestCase
 
         $this->assertSame(['Waiting School'], $this->names(['plan' => 'under_review']));
     }
+
+    public function test_dashboard_cards_count_expiring_and_expired_organizations_and_open_the_matching_list(): void
+    {
+        $this->school('Ends In 3 Days', 'active');
+        BaseSubscription::query()->whereHas('organization', fn ($q) => $q->where('name', 'Ends In 3 Days'))->update(['subscription_expires_at' => now()->addDays(3)]);
+        $this->school('Trial Ends Soon', 'trialing');
+        BaseSubscription::query()->whereHas('organization', fn ($q) => $q->where('name', 'Trial Ends Soon'))->update(['trial_ends_at' => now()->addDays(5)]);
+        $this->school('Sms Ends Soon', 'active', sms: 'on');
+        FeatureEntitlement::query()->whereHas('organization', fn ($q) => $q->where('name', 'Sms Ends Soon'))->update(['expires_at' => now()->addDays(6)]);
+        $this->school('Plenty Of Time', 'active', sms: 'on');
+        // Expired Base + SMS: Scan expired and the school had SMS before (its SMS ran out too).
+        $hadSms = $this->school('Lapsed With Sms', 'expired');
+        FeatureEntitlement::create(['organization_id' => $hadSms->organization_id, 'feature' => FeatureEntitlement::SMS, 'enabled' => true, 'starts_at' => now()->subDays(60), 'expires_at' => now()->subDays(30)]);
+        // Expired Base only: Scan expired and SMS was never turned on.
+        $this->school('Lapsed Base Only', 'expired');
+        $this->school('Lapsed Gym', 'expired', 'fitness');
+
+        $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
+        $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()
+            ->assertJsonPath('total_organizations', 7)
+            ->assertJsonPath('expiring_soon', 3)
+            ->assertJsonPath('expired_with_sms', 1)
+            ->assertJsonPath('expired_base_only', 2);
+
+        $this->assertSame(['Ends In 3 Days', 'Sms Ends Soon', 'Trial Ends Soon'], $this->names(['plan' => 'expiring_soon']));
+        $this->assertSame(['Lapsed With Sms'], $this->names(['plan' => 'expired_with_sms']));
+        $this->assertSame(['Lapsed Base Only', 'Lapsed Gym'], $this->names(['plan' => 'expired_base_only']));
+    }
+
+    public function test_dashboard_counts_payments_still_waiting_for_review(): void
+    {
+        $owner = $this->school('Waiting', 'expired');
+        $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
+        $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('pending_payment_reviews', 0);
+
+        $bill = $this->actingAs($owner)->getJson('/api/billing?type='.Bill::TYPE_BASE)->assertOk()->json('current_bill');
+        $paymentId = $this->actingAs($owner)->post('/api/billing/payments', [
+            'amount' => number_format($bill['total_minor'] / 100, 2, '.', ''), 'bill_id' => $bill['id'], 'reference_number' => 'COUNT-1', 'paid_at' => '2026-11-10',
+        ], ['Accept' => 'application/json'])->assertCreated()->json('payment.id');
+        $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('pending_payment_reviews', 1);
+
+        $this->actingAs($admin)->postJson('/api/super-admin/billing/payments/'.$paymentId.'/activate')->assertOk();
+        $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('pending_payment_reviews', 0);
+    }
 }

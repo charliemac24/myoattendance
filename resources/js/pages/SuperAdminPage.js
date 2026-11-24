@@ -35,10 +35,12 @@ function Status({ value, tone }) {
     return h('span', { className: 'sa-status sa-status--' + (tone || value) }, value);
 }
 
-const STAT_ICON = { blue: 'grid', green: 'check', amber: 'clock' };
+const STAT_ICON = { blue: 'grid', green: 'check', amber: 'clock', red: 'x' };
 
-function Stat({ label, value, tone }) {
-    return h('div', { className: 'sa-stat' }, h('div', { className: 'sa-stat-icon sa-stat-icon--' + tone }, h(Icon, { name: STAT_ICON[tone] || 'grid' })), h('div', null, h('p', { className: 'sa-stat-label' }, label), h('p', { className: 'sa-stat-value' }, value)));
+// A dashboard card; with onClick it opens the Organizations list already filtered to the organizations it counts.
+function Stat({ label, value, tone, hint, onClick }) {
+    const body = [h('div', { key: 'icon', className: 'sa-stat-icon sa-stat-icon--' + tone }, h(Icon, { name: STAT_ICON[tone] || 'grid' })), h('div', { key: 'text' }, h('p', { className: 'sa-stat-label' }, label), h('p', { className: 'sa-stat-value' }, value), hint && h('p', { className: 'sa-stat-hint' }, hint))];
+    return onClick ? h('button', { type: 'button', className: 'sa-stat sa-stat--link', onClick, title: 'Show these organizations' }, body) : h('div', { className: 'sa-stat' }, body);
 }
 
 const planStatusText = (plan) => ({ trialing: 'Free trial', active: 'Active', expired: 'Expired' })[plan?.status] || (plan?.status || 'Unknown');
@@ -62,7 +64,7 @@ function planDetail(plan) {
 
 // Organizations list filters: Scan plan status, SMS status and industry, combined with the search box.
 const ORG_FILTERS = [
-    ['plan', 'Scan: all', [['trialing', 'Free trial'], ['active', 'Active'], ['expired', 'Expired'], ['under_review', 'Payment under review']], 'Scan'],
+    ['plan', 'Scan: all', [['trialing', 'Free trial'], ['active', 'Active'], ['expiring_soon', 'Ends within 7 days'], ['expired', 'Expired'], ['expired_with_sms', 'Expired, had SMS'], ['expired_base_only', 'Expired, Base only'], ['under_review', 'Payment under review']], 'Scan'],
     ['sms', 'SMS: all', [['on', 'On'], ['scheduled', 'Scheduled'], ['off', 'Off']], 'SMS'],
     ['type', 'All industries', [['school', 'School'], ['fitness', 'Fitness / Gym'], ['other', 'Other']], 'Industry'],
 ];
@@ -310,9 +312,12 @@ export function SuperAdminPage({ user, onAuthenticated }) {
     useEffect(() => { const timer = setTimeout(loadPayments, 250); return () => clearTimeout(timer); }, [paymentStatus, paymentSearch]);
     const signOut = async () => { await logout(); onAuthenticated(null); };
     const navItems = [['overview', 'Overview', 'home'], ['organizations', 'Organizations', 'grid'], ['requests', 'SMS Requests', 'mail'], ['payments', 'Payments', 'card']];
+    // Payments still waiting for Activate or Reject; shown as a badge on the Payments menu item.
+    const pendingCount = dashboard?.pending_payment_reviews || 0;
+    const showOrganizations = (plan) => { setSearch(''); setFilters({ plan, sms: '', type: '' }); setTab('organizations'); };
     const refreshLabel = (label, onClick) => h('button', { className: 'sa-button sa-button--small sa-button--ghost', onClick }, h(Icon, { name: 'refresh' }), label);
     const paymentsPanel = h('div', { className: 'sa-card' },
-        h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Payments'), h('p', null, 'Review GCash submissions and press Activate to turn on Scan only or Scan + SMS')), refreshLabel('Refresh', loadPayments)),
+        h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Payments'), h('p', null, 'Review GCash submissions and press Activate to turn on Scan only or Scan + SMS')), refreshLabel('Refresh', () => Promise.all([loadPayments(), loadDashboard()]))),
         h('div', { className: 'sa-toolbar' },
             h('div', { className: 'sa-search-wrap' }, h(Icon, { name: 'search' }), h('input', { className: 'sa-search', placeholder: 'Search organization or GCash reference…', value: paymentSearch, onChange: (event) => setPaymentSearch(event.target.value) })),
             h('select', { value: paymentStatus, onChange: (event) => setPaymentStatus(event.target.value) }, h('option', { value: 'pending' }, 'Pending Review'), h('option', { value: '' }, 'All'), h('option', { value: 'approved' }, 'Approved'), h('option', { value: 'rejected' }, 'Rejected'))
@@ -320,10 +325,15 @@ export function SuperAdminPage({ user, onAuthenticated }) {
         h(PaymentReviewTable, { payments, loading: paymentsLoading, onReview: setReviewPayment })
     );
     return h('main', { className: 'sa-shell' }, h('header', { className: 'sa-topbar' }, h('div', { className: 'sa-brand' }, h('div', { className: 'sa-brand-mark' }, 'M'), h('div', null, h('strong', null, 'MYO Systems'), h('span', null, 'Platform administration'))), h('div', { className: 'sa-user' }, h('div', null, h('strong', null, user.name), h('span', null, 'Super Admin')), h('button', { className: 'sa-link-button', onClick: signOut }, h(Icon, { name: 'logout' }), 'Sign out'))),
-        h('div', { className: 'sa-layout' }, h('nav', { className: 'sa-sidebar' }, navItems.map(([value, label, icon]) => h('button', { className: 'sa-nav-item ' + (tab === value ? 'is-active' : ''), key: value, onClick: () => { setTab(value); if (value === 'requests') loadRequests(); } }, h(Icon, { name: icon }), label))), h('section', { className: 'sa-content' },
+        h('div', { className: 'sa-layout' }, h('nav', { className: 'sa-sidebar' }, navItems.map(([value, label, icon]) => h('button', { className: 'sa-nav-item ' + (tab === value ? 'is-active' : ''), key: value, onClick: () => { setTab(value); if (value === 'requests') loadRequests(); } }, h(Icon, { name: icon }), label, value === 'payments' && pendingCount > 0 && h('span', { className: 'sa-count-badge', title: pendingCount + ' payments waiting for review' }, pendingCount > 99 ? '99+' : pendingCount)))), h('section', { className: 'sa-content' },
             h('div', { className: 'sa-page-heading' }, h('div', null, h('p', { className: 'sa-eyebrow' }, 'SUPER ADMIN'), h('h1', null, tab === 'overview' ? 'Good morning, ' + user.name.split(' ')[0] : tab === 'organizations' ? 'Organizations' : tab === 'requests' ? 'SMS Requests' : 'Payments'), h('p', null, 'Keep subscriber access and payment records up to date.')), h('span', { className: 'sa-date' }, new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' }))),
             error && h('div', { className: 'sa-error' }, error),
-            tab === 'overview' && dashboard && h(React.Fragment, null, h('div', { className: 'sa-stats' }, h(Stat, { label: 'Total organizations', value: dashboard.total_organizations, tone: 'blue' }), h(Stat, { label: 'Active SMS subscribers', value: dashboard.active_sms_subscribers, tone: 'green' }), h(Stat, { label: 'Expired SMS access', value: dashboard.expired_sms_subscribers, tone: 'amber' })), h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Recent payments'), h('p', null, 'Newest submitted first')), h('button', { className: 'sa-link-button', onClick: () => setTab('payments') }, 'View all ', h(Icon, { name: 'chevronRight' }))), h('div', { className: 'sa-recent-list' }, h(PaymentRows, { payments: dashboard.recent_payments })))),
+            tab === 'overview' && dashboard && h(React.Fragment, null, h('div', { className: 'sa-stats' },
+                h(Stat, { label: 'Expiring soon', value: dashboard.expiring_soon, tone: 'amber', hint: 'Scan or SMS ends within 7 days', onClick: () => showOrganizations('expiring_soon') }),
+                h(Stat, { label: 'Expired Base + SMS', value: dashboard.expired_with_sms, tone: 'red', hint: 'Scan expired, had SMS', onClick: () => showOrganizations('expired_with_sms') }),
+                h(Stat, { label: 'Expired Base only', value: dashboard.expired_base_only, tone: 'red', hint: 'Scan expired, never had SMS', onClick: () => showOrganizations('expired_base_only') }),
+                h(Stat, { label: 'Total organizations', value: dashboard.total_organizations, tone: 'blue', hint: 'All schools and gyms', onClick: () => showOrganizations('') })),
+            h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Recent payments', pendingCount > 0 && h('span', { className: 'sa-count-badge', style: { marginLeft: '8px' } }, pendingCount + ' to review')), h('p', null, 'Newest submitted first')), h('button', { className: 'sa-link-button', onClick: () => setTab('payments') }, 'View all ', h(Icon, { name: 'chevronRight' }))), h('div', { className: 'sa-recent-list' }, h(PaymentRows, { payments: dashboard.recent_payments })))),
             (tab === 'overview' || tab === 'organizations') && h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Organizations'), h('p', null, 'Search and manage subscriber access')), refreshLabel('Refresh', refresh)), h('div', { className: 'sa-toolbar' }, h('div', { className: 'sa-search-wrap' }, h(Icon, { name: 'search' }), h('input', { className: 'sa-search', placeholder: 'Search organization, owner, or email…', value: search, onChange: (event) => setSearch(event.target.value) })), ...orgFilterSelects(filters, setFilters)), h('p', { className: 'sa-muted', style: { margin: '0 20px 12px' } }, loading || orgTotal === null ? '' : `${orgTotal} ${orgTotal === 1 ? 'organization' : 'organizations'}${filters.plan || filters.sms || filters.type || search ? ' match' : ''}`, (filters.plan || filters.sms || filters.type) && h('button', { type: 'button', className: 'sa-link-button', style: { marginLeft: '10px' }, onClick: () => setFilters({ plan: '', sms: '', type: '' }) }, 'Clear filters')), h(OrganizationTable, { rows, loading, onSelect: select })),
             tab === 'requests' && h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Pending SMS requests'), h('p', null, 'Organizations waiting for payment confirmation and activation')), refreshLabel('Refresh', loadRequests)), h(RequestTable, { requests, loading: requestsLoading, onSelect: async (id) => { try { const result = await get(api('/sms-requests/' + id)); const organization = await get(api('/organizations/' + result.request.organization.id)); setSelected(organization.organization); } catch (caught) { setError(caught.message); } } })),
             tab === 'payments' && paymentsPanel,

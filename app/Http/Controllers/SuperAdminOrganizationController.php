@@ -47,7 +47,7 @@ class SuperAdminOrganizationController extends Controller
         $perPage = min($request->integer('per_page', 20), 100);
         $plan = $request->input('plan');
         $sms = $request->input('sms');
-        $planFilter = in_array($plan, ['trialing', 'active', 'expired', 'under_review'], true);
+        $planFilter = in_array($plan, ['trialing', 'active', 'expired', 'under_review', 'expiring_soon', 'expired_with_sms', 'expired_base_only'], true);
         $smsFilter = in_array($sms, ['on', 'scheduled', 'off'], true);
 
         if (! $planFilter && ! $smsFilter) {
@@ -62,7 +62,13 @@ class SuperAdminOrganizationController extends Controller
             ->map(fn (Organization $organization) => $this->summary($organization, $features, $subscriptions))
             ->filter(function (array $row) use ($plan, $sms, $planFilter, $smsFilter): bool {
                 $current = $row['current_plan'];
-                $planOk = ! $planFilter || ($plan === 'under_review' ? ! empty($current['pending_payment']) : $current['status'] === $plan);
+                $planOk = ! $planFilter || match ($plan) {
+                    'under_review' => ! empty($current['pending_payment']),
+                    'expiring_soon' => self::expiringSoon($row),
+                    'expired_with_sms' => self::expiredWithSms($row),
+                    'expired_base_only' => self::expiredBaseOnly($row),
+                    default => $current['status'] === $plan,
+                };
                 $smsState = in_array($current['sms']['state'], ['on', 'scheduled'], true) ? $current['sms']['state'] : 'off';
 
                 return $planOk && (! $smsFilter || $smsState === $sms);
@@ -161,10 +167,14 @@ class SuperAdminOrganizationController extends Controller
     public function dashboard(FeatureEntitlementService $features, BaseSubscriptionService $subscriptions): JsonResponse
     {
         $organizations = Organization::with(['featureEntitlements', 'baseSubscription'])->get();
+        $rows = $organizations->map(fn (Organization $organization) => $this->summary($organization, $features, $subscriptions));
         $active = $organizations->filter(fn ($organization) => $features->canUseSms($organization))->count();
         $expired = $organizations->filter(fn ($organization) => ($e = $organization->featureEntitlements->firstWhere('feature', FeatureEntitlement::SMS))?->enabled && $e->expires_at?->toDateString() < today()->toDateString())->count();
 
-        return response()->json(['total_organizations' => $organizations->count(), 'organizations_on_trial' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'trialing')->count(), 'active_subscribers' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'active')->count(), 'expired_subscriptions' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'expired')->count(), 'active_sms_subscribers' => $active, 'expired_sms_subscribers' => $expired, 'pending_sms_requests' => OrganizationFeatureRequest::where('feature', 'sms')->where('status', 'pending')->count(), 'pending_payment_reviews' => Payment::where('status', Payment::STATUS_PENDING)->count(), 'recent_payments' => Payment::with(['organization:id,name', 'recordedBy:id,name'])->latest()->latest('id')->limit(10)->get()->map(fn ($p) => $this->payment($p))]);
+        return response()->json(['total_organizations' => $organizations->count(),
+            'expiring_soon' => $rows->filter(fn (array $row) => self::expiringSoon($row))->count(),
+            'expired_with_sms' => $rows->filter(fn (array $row) => self::expiredWithSms($row))->count(),
+            'expired_base_only' => $rows->filter(fn (array $row) => self::expiredBaseOnly($row))->count(), 'organizations_on_trial' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'trialing')->count(), 'active_subscribers' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'active')->count(), 'expired_subscriptions' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'expired')->count(), 'active_sms_subscribers' => $active, 'expired_sms_subscribers' => $expired, 'pending_sms_requests' => OrganizationFeatureRequest::where('feature', 'sms')->where('status', 'pending')->count(), 'pending_payment_reviews' => Payment::where('status', Payment::STATUS_PENDING)->count(), 'recent_payments' => Payment::with(['organization:id,name', 'recordedBy:id,name'])->latest()->latest('id')->limit(10)->get()->map(fn ($p) => $this->payment($p))]);
     }
 
     /**
@@ -181,12 +191,55 @@ class SuperAdminOrganizationController extends Controller
         ] : null;
     }
 
+    /** Days ahead that count as "expiring soon" on the dashboard. */
+    public const EXPIRING_SOON_DAYS = 7;
+
+    /**
+     * Expiring soon: the Scan plan (paid Base or free trial) or SMS is still running and ends within the next 7 days.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private static function expiringSoon(array $row): bool
+    {
+        $plan = $row['current_plan'];
+        $today = today()->toDateString();
+        $limit = today()->addDays(self::EXPIRING_SOON_DAYS)->toDateString();
+        $within = fn ($date): bool => $date !== null && ($day = Carbon::parse($date)->toDateString()) >= $today && $day <= $limit;
+        $scanEnds = match ($plan['status']) {
+            'active' => $plan['base_paid_through'],
+            'trialing' => $plan['base_paid_through'] ?? $plan['trial_ends_at'],
+            default => null,
+        };
+
+        return $within($scanEnds) || ($plan['sms']['state'] === 'on' && $within($plan['sms']['ends_at']));
+    }
+
+    /**
+     * Expired Base + SMS: the Scan plan has expired and the organization had SMS at some point (it has an SMS record).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private static function expiredWithSms(array $row): bool
+    {
+        return $row['current_plan']['status'] === 'expired' && $row['had_sms'];
+    }
+
+    /**
+     * Expired Base only: the Scan plan has expired and the organization never had SMS.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private static function expiredBaseOnly(array $row): bool
+    {
+        return $row['current_plan']['status'] === 'expired' && ! $row['had_sms'];
+    }
+
     private function summary(Organization $organization, FeatureEntitlementService $features, BaseSubscriptionService $subscriptions): array
     {
         $entitlement = $organization->featureEntitlements->firstWhere('feature', FeatureEntitlement::SMS) ?? $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->first();
         $status = $features->canUseSms($organization) ? 'active' : ($entitlement?->enabled && $entitlement->starts_at?->toDateString() > today()->toDateString() ? 'scheduled' : ($entitlement?->enabled && $entitlement->expires_at?->toDateString() < today()->toDateString() ? 'expired' : 'disabled'));
 
-        return ['id' => $organization->id, 'name' => $organization->name, 'type' => $organization->type, 'created_at' => $organization->created_at, 'owner' => $organization->owner, 'users_count' => $organization->users_count ?? $organization->users()->count(), 'people_count' => $organization->persons_count ?? $organization->persons()->count(), 'active_people_count' => $organization->active_people_count ?? $organization->persons()->where('is_active', true)->count(), 'base_subscription' => $subscriptions->payload($organization), 'sms_access_status' => $status, 'sms_resumable_until' => $features->resumableSmsUntil($organization)?->toDateString(), 'sms_starts_at' => $entitlement?->starts_at, 'sms_expires_at' => $entitlement?->expires_at, 'sms_pricing' => $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->latest('effective_from')->first(), 'current_plan' => app(BillingService::class)->currentPlan($organization)];
+        return ['id' => $organization->id, 'name' => $organization->name, 'type' => $organization->type, 'created_at' => $organization->created_at, 'owner' => $organization->owner, 'users_count' => $organization->users_count ?? $organization->users()->count(), 'people_count' => $organization->persons_count ?? $organization->persons()->count(), 'active_people_count' => $organization->active_people_count ?? $organization->persons()->where('is_active', true)->count(), 'base_subscription' => $subscriptions->payload($organization), 'sms_access_status' => $status, 'sms_resumable_until' => $features->resumableSmsUntil($organization)?->toDateString(), 'had_sms' => $entitlement !== null, 'sms_starts_at' => $entitlement?->starts_at, 'sms_expires_at' => $entitlement?->expires_at, 'sms_pricing' => $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->latest('effective_from')->first(), 'current_plan' => app(BillingService::class)->currentPlan($organization)];
     }
 
     private function payment(Payment $payment): array

@@ -73,6 +73,19 @@ class SmsPriceEstimator
     }
 
     /**
+     * The answers in words, e.g. "50 people · Time In, Time Out · Weekdays", kept with the estimated price.
+     *
+     * @param  list<string>  $texts
+     */
+    public static function describeAnswers(int $people, array $texts, string $days): string
+    {
+        $textLabels = ['time_in' => 'Time In', 'time_out' => 'Time Out', 'late' => 'Late'];
+        $dayLabels = ['weekdays' => 'Weekdays', 'mon_sat' => 'Mon–Sat', 'every_day' => 'Every day'];
+
+        return $people.' '.($people === 1 ? 'person' : 'people').' · '.implode(', ', array_map(fn (string $text) => $textLabels[$text] ?? $text, $texts)).' · '.($dayLabels[$days] ?? $days);
+    }
+
+    /**
      * Whether the school has said how many people, which texts and which days, so a price can be worked out.
      */
     public static function hasAnswers(Organization $organization): bool
@@ -99,8 +112,9 @@ class SmsPriceEstimator
         if ($active && $active->source === SmsPricingAgreement::SOURCE_ADMIN) {
             return ['applied' => false, 'amount_minor' => $amount];
         }
-        if (! $active || $active->sms_monthly_price_minor !== $amount) {
-            $this->pricing->setPrice($organization, $actor, $amount, null, 'Estimated from the school\'s answers', SmsPricingAgreement::SOURCE_ESTIMATE);
+        $notes = 'School\'s answers: '.self::describeAnswers($people, $texts, $days);
+        if (! $active || $active->sms_monthly_price_minor !== $amount || $active->notes !== $notes) {
+            $this->pricing->setPrice($organization, $actor, $amount, null, $notes, SmsPricingAgreement::SOURCE_ESTIMATE);
         }
 
         return ['applied' => true, 'amount_minor' => $amount];

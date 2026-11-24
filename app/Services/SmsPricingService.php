@@ -23,13 +23,7 @@ class SmsPricingService
         $effectiveFrom = Carbon::parse($effectiveFrom ?? now($organization->timezone ?: config('app.timezone'))->toDateString())->toDateString();
 
         $agreement = DB::transaction(function () use ($organization, $actor, $priceMinor, $effectiveFrom, $notes, $source): SmsPricingAgreement {
-            $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->lockForUpdate()->get()
-                ->each(fn (SmsPricingAgreement $previous) => $previous->update([
-                    'status' => SmsPricingAgreement::STATUS_SUPERSEDED,
-                    'effective_until' => Carbon::parse($effectiveFrom)->subDay()->toDateString(),
-                ]));
-
-            return $organization->smsPricingAgreements()->create([
+            $values = [
                 'sms_monthly_price_minor' => $priceMinor,
                 'currency' => 'PHP',
                 'person_count_snapshot' => $organization->persons()->where('is_active', true)->count(),
@@ -39,7 +33,26 @@ class SmsPricingService
                 'created_by' => $actor->id,
                 'agreed_at' => now(),
                 'notes' => $notes,
-            ]);
+            ];
+            $previousPrices = $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->lockForUpdate()->get();
+
+            // The school changed its answers again on the same day: keep one estimate row instead of one per save.
+            $sameDayEstimate = $previousPrices->first(fn (SmsPricingAgreement $previous) => $source === SmsPricingAgreement::SOURCE_ESTIMATE
+                && $previous->source === SmsPricingAgreement::SOURCE_ESTIMATE && $previous->effective_from->toDateString() === $effectiveFrom);
+            if ($sameDayEstimate && $previousPrices->count() === 1) {
+                $sameDayEstimate->update($values);
+
+                return $sameDayEstimate;
+            }
+
+            $previousPrices->each(fn (SmsPricingAgreement $previous) => $previous->update(
+                // A price replaced on or before its own start date never applied to anything.
+                $previous->effective_from->toDateString() >= $effectiveFrom
+                    ? ['status' => SmsPricingAgreement::STATUS_CANCELLED, 'effective_until' => null]
+                    : ['status' => SmsPricingAgreement::STATUS_SUPERSEDED, 'effective_until' => Carbon::parse($effectiveFrom)->subDay()->toDateString()],
+            ));
+
+            return $organization->smsPricingAgreements()->create($values);
         });
 
         // Refresh any unpaid bill so the school sees the right amount right away.
@@ -49,14 +62,14 @@ class SmsPricingService
     }
 
     /**
-     * Every price the school has had, newest first.
+     * Every price the school has had, newest first. A cancelled price was replaced before it started and was never billed.
      *
      * @return Collection<int, SmsPricingAgreement>
      */
     public function history(Organization $organization): Collection
     {
         return $organization->smsPricingAgreements()->with('createdBy:id,name')
-            ->whereIn('status', [SmsPricingAgreement::STATUS_ACTIVE, SmsPricingAgreement::STATUS_SUPERSEDED])
+            ->whereIn('status', [SmsPricingAgreement::STATUS_ACTIVE, SmsPricingAgreement::STATUS_SUPERSEDED, SmsPricingAgreement::STATUS_CANCELLED])
             ->latest('effective_from')->latest('id')->get();
     }
 }

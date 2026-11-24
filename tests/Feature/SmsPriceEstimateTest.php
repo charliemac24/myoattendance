@@ -105,18 +105,37 @@ class SmsPriceEstimateTest extends TestCase
         $this->assertSame('2026-11-20', substr($bill['billing_period_start'], 0, 10));
     }
 
-    public function test_changing_answers_replaces_the_estimate_and_keeps_history(): void
+    public function test_changing_answers_on_the_same_day_keeps_one_estimate_and_a_new_day_keeps_history(): void
     {
         $owner = $this->trialOwner();
-        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 350, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
+        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 1, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
         $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 400, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk()
             ->assertJsonPath('amount_minor', 880000);
 
-        $this->assertSame(880000, $owner->organization->smsPricingAgreements()->where('status', 'active')->value('sms_monthly_price_minor'));
-        $this->assertSame(2, $owner->organization->smsPricingAgreements()->count());
+        $agreements = $owner->organization->smsPricingAgreements();
+        $this->assertSame(1, $agreements->count());
+        $this->assertSame(880000, $agreements->value('sms_monthly_price_minor'));
+        $this->assertSame("School's answers: 400 people · Time In, Time Out · Weekdays", $agreements->value('notes'));
 
-        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 400, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
+        $this->travelTo('2026-11-12 02:00:00');
+        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 300, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
+        $history = $owner->organization->smsPricingAgreements()->orderBy('id')->get();
+        $this->assertSame([SmsPricingAgreement::STATUS_SUPERSEDED, SmsPricingAgreement::STATUS_ACTIVE], $history->pluck('status')->all());
+        $this->assertSame('2026-11-11', $history[0]->effective_until->toDateString());
+
+        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 300, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
         $this->assertSame(2, $owner->organization->smsPricingAgreements()->count());
+    }
+
+    public function test_admin_price_set_on_the_estimates_first_day_marks_the_estimate_never_billed(): void
+    {
+        $owner = $this->trialOwner();
+        $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 50, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertOk();
+
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms-pricing', ['sms_monthly_price' => '1200'])->assertOk()
+            ->assertJsonPath('history.0.status', SmsPricingAgreement::STATUS_ACTIVE)
+            ->assertJsonPath('history.1.status', SmsPricingAgreement::STATUS_CANCELLED)
+            ->assertJsonPath('history.1.effective_until', null);
     }
 
     public function test_admin_price_stays_in_control_over_the_estimate(): void

@@ -17,7 +17,7 @@ class SuperAdminPaymentController extends Controller
             ->when($request->filled('from'), fn ($q) => $q->whereDate('paid_at', '>=', $request->input('from')))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('paid_at', '<=', $request->input('to')))
             ->when($request->filled('reference'), fn ($q) => $q->where('reference_number', 'like', '%'.$request->input('reference').'%'))
-            ->latest('paid_at')->paginate(min($request->integer('per_page', 20), 100))->withQueryString();
+            ->latest('paid_at')->latest('id')->paginate(min($request->integer('per_page', 20), 100))->withQueryString();
 
         return response()->json($payments);
     }

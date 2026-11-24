@@ -21,7 +21,7 @@ class SuperAdminBillingController extends Controller
         $payments = Payment::with(['organization:id,name', 'submittedBy:id,name,email', 'reviewedBy:id,name', 'bill.items'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($query) => $query->where('reference_number', 'like', '%'.$request->input('search').'%')->orWhereHas('organization', fn ($organization) => $organization->where('name', 'like', '%'.$request->input('search').'%'))))
-            ->latest()->paginate(min($request->integer('per_page', 30), 100))->withQueryString();
+            ->latest()->latest('id')->paginate(min($request->integer('per_page', 30), 100))->withQueryString();
         $payments->getCollection()->each(fn (Payment $payment) => $payment->setAttribute('activates', $activates = $payment->activates())->setAttribute('activates_label', Payment::activatesLabel($activates)));
 
         return response()->json($payments);

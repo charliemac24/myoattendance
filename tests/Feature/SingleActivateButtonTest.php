@@ -207,4 +207,19 @@ class SingleActivateButtonTest extends TestCase
         $this->assertStringContainsString('Add SMS · ${amount}', $script);
         $this->assertStringNotContainsString('Start SMS now', $script);
     }
+
+    public function test_recent_payments_show_the_newest_submission_first_even_on_the_same_paid_day(): void
+    {
+        $first = $this->owner();
+        $second = $this->owner();
+        $third = $this->owner();
+        $firstId = $this->submitProof($first, Bill::TYPE_BASE, 'SAME-DAY-1');
+        $this->travel(5)->minutes();
+        $secondId = $this->submitProof($second, Bill::TYPE_PACKAGE, 'SAME-DAY-2');
+        $this->travel(5)->minutes();
+        $thirdId = $this->submitProof($third, Bill::TYPE_BASE, 'SAME-DAY-3');
+
+        $this->assertSame([$thirdId, $secondId, $firstId], array_slice(array_column($this->actingAs($this->superAdmin())->getJson('/api/super-admin/dashboard')->assertOk()->json('recent_payments'), 'id'), 0, 3));
+        $this->assertSame([$thirdId, $secondId, $firstId], array_column($this->actingAs($this->superAdmin())->getJson('/api/super-admin/billing/payments')->assertOk()->json('data'), 'id'));
+    }
 }

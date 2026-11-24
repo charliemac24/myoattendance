@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\BaseSubscriptionService;
 use App\Services\BillingService;
 use App\Services\SmsAccessRequestService;
+use App\Services\SmsPriceEstimator;
 use App\Services\SmsPricingService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -33,6 +34,9 @@ use Illuminate\Support\Facades\Storage;
  * - demo-request / password: Base paid, asked for a custom SMS price; super admin sets the price and sends payment instructions
  * - demo-priced / password: Base paid, SMS price set by super admin, so Billing shows Base + SMS and Add SMS
  * - demo-gym / password: expired Fitness / Gym with no SMS price, to test "Request a custom SMS price" with gym wording
+ * - demo-estimate / password: school that just signed up and answered the SMS questions on the registration form
+ *   (120 people, Time In + Time Out, weekdays), so super admin sees "Estimated SMS price, not yet reviewed"
+ * - demo-estimate-gym / password: the same for a Fitness / Gym (80 members, Time In only, every day)
  *
  * The app has no default SMS price. The demo schools that need one get DEMO_SMS_PRICE_MINOR here, as demo data only.
  */
@@ -41,7 +45,7 @@ class ActivationDemoSeeder extends Seeder
     /** Demo data only: the SMS price given to the demo schools that need one. Real schools get theirs from Billing or super admin. */
     private const DEMO_SMS_PRICE_MINOR = 49900;
 
-    public function run(BillingService $billing, SmsPricingService $pricing, SmsAccessRequestService $requests): void
+    public function run(BillingService $billing, SmsPricingService $pricing, SmsAccessRequestService $requests, SmsPriceEstimator $estimator): void
     {
         if (app()->environment('production')) {
             return;
@@ -77,6 +81,15 @@ class ActivationDemoSeeder extends Seeder
             if ($paidPlan) {
                 $this->submitPayment($school, $owner, $billing->currentBill($school, $paidPlan, 1), strtoupper($username));
             }
+        }
+
+        foreach ([
+            ['demo-estimate', 'Activation Demo – Signed up with SMS answers', 'school', 120, ['time_in', 'time_out'], 'weekdays'],
+            ['demo-estimate-gym', 'Activation Demo – Gym signed up with SMS answers', 'fitness', 80, ['time_in'], 'every_day'],
+        ] as [$username, $name, $type, $people, $texts, $days]) {
+            $school = $this->resetExpiredSchool($name, $type);
+            $school->baseSubscription()->update(['trial_starts_at' => now(), 'trial_ends_at' => now()->addDays(BaseSubscriptionService::TRIAL_DAYS), 'status' => BaseSubscription::STATUS_TRIALING]);
+            $estimator->saveAnswers($school, $this->owner($school, $username), $people, $texts, $days);
         }
     }
 

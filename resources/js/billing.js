@@ -398,15 +398,6 @@ function renderSmsEstimate(billing, sms) {
     box.querySelectorAll('[data-estimate="text"]').forEach((input) => { input.checked = texts.includes(input.value); });
     box.querySelectorAll('[data-estimate="days"]').forEach((input) => { input.checked = input.value === days; });
 
-    const canRequest = !sms?.request_status || sms.request_status !== 'pending';
-    if (canRequest) {
-        const link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'billing-link-btn';
-        link.textContent = 'Prefer a custom price? Request SMS instead';
-        link.addEventListener('click', () => requestSms(billing.current_plan?.in_trial ? undefined : 'next_payment', [link]));
-        box.querySelector('[data-estimate="note"]').append(' ', link);
-    }
 
     const read = () => ({
         people: Number(people.value) || 0,
@@ -546,7 +537,7 @@ const SMS_CAPTIONS = {
     choose_trial_timing: 'Not set up yet · request it below',
     request: 'Not set up yet · request it below',
     waiting_for_price: 'Requested · we will send your price soon',
-    renew_first: 'Renew Base first, then request SMS',
+    renew_first: 'Not set up yet · pick Base + SMS to see your price',
 };
 
 /**
@@ -564,6 +555,24 @@ function renderSmsRequest(sms) {
     // 2. SMS questions and "Request SMS" now live under Base + SMS (renderSmsEstimate); only the request status shows here.
     if (step === 'waiting_for_price') {
         smsLine('SMS requested. We will send your SMS price soon.');
+    }
+
+    // 3. Any school without a price set by MYO Attendance can ask for a custom SMS price, whatever plan is picked.
+    const smsRunning = ['on', 'scheduled'].includes(plan?.sms?.state);
+    if (!smsRunning && sms?.pricing?.source !== 'admin') {
+        if (sms?.request_status === 'pending') {
+            if (step !== 'waiting_for_price') smsLine('Custom SMS price requested. We will send your price soon.');
+        } else {
+            smsLine('Want MYO Attendance to set your SMS price instead of the estimate?');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'billing-link-btn';
+            button.dataset.smsCustomRequest = '';
+            button.textContent = 'Request a custom SMS price';
+            // No start choice is sent: trial schools keep the one they picked above, others start with their next payment.
+            button.addEventListener('click', () => requestSms(undefined, [button]));
+            els.smsRequest.appendChild(button);
+        }
     }
 
     els.smsRequest.hidden = els.smsRequest.childElementCount === 0;

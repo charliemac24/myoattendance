@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Organization;
 use App\Models\OrganizationFeatureRequest;
 use App\Models\Payment;
+use App\Models\SmsPricingAgreement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -33,12 +34,12 @@ class SmsAccessRequestService
             if (app(FeatureEntitlementService::class)->canUseSms($organization)) {
                 throw new \DomainException('SMS is already active for this organization.');
             }
-            if (! app(BaseSubscriptionService::class)->canUseScanner($organization)) {
-                throw new \DomainException('Renew your MYO Attendance subscription before requesting SMS Notifications.');
-            }
+            // An expired school may ask for its SMS price too: it then renews with Base + SMS in one payment.
             $currentPlan = app(BillingService::class)->currentPlan($organization);
             // A trial school may still record its start choice after a price is set; others just pay Base + SMS.
-            if ($currentPlan['sms']['state'] === 'available' && ! $currentPlan['in_trial']) {
+            // A price the school got from its own answers can still be replaced by a custom one; a price MYO Attendance set cannot.
+            $priceSetByAdmin = $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->latest('effective_from')->value('source') === SmsPricingAgreement::SOURCE_ADMIN;
+            if ($currentPlan['sms']['state'] === 'available' && $priceSetByAdmin && ! $currentPlan['in_trial']) {
                 throw new \DomainException('Your SMS price is already set. Choose Base + SMS on the Billing page to turn SMS on.');
             }
             // Only schools still on their free trial choose when their paid plan starts; the request follows that choice.

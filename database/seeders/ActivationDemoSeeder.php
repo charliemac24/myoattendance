@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Storage;
  * - demo-addsms / password: Base paid and activated 3 days ago, no SMS, so you can press "Add SMS", pay, then Activate
  * - demo-cash / password: expired school, nothing paid, so you can use "Record payment" (Cash) in super admin
  * - demo-gcash / password: expired school that paid by GCash but only messaged you; use "Record payment" (GCash)
+ * - demo-bank / password: expired school that paid Base + SMS by bank transfer; use "Record payment" (Bank transfer)
  */
 class ActivationDemoSeeder extends Seeder
 {
@@ -47,6 +48,7 @@ class ActivationDemoSeeder extends Seeder
             ['demo-addsms', 'Activation Demo – Add SMS later', null],
             ['demo-cash', 'Activation Demo – Paid in cash', null],
             ['demo-gcash', 'Activation Demo – Paid by GCash message', null],
+            ['demo-bank', 'Activation Demo – Paid by bank transfer', null],
         ] as [$username, $name, $paidPlan]) {
             $school = $this->resetExpiredSchool($name);
             $owner = $this->owner($school, $username);

@@ -60,8 +60,17 @@ function planDetail(plan) {
     return '';
 }
 
+// Organizations list filters: Scan plan status, SMS status and industry, combined with the search box.
+const ORG_FILTERS = [
+    ['plan', 'Scan: all', [['trialing', 'Free trial'], ['active', 'Active'], ['expired', 'Expired'], ['under_review', 'Payment under review']], 'Scan'],
+    ['sms', 'SMS: all', [['on', 'On'], ['scheduled', 'Scheduled'], ['off', 'Off']], 'SMS'],
+    ['type', 'All industries', [['school', 'School'], ['fitness', 'Fitness / Gym'], ['other', 'Other']], 'Industry'],
+];
+const orgFilterSelects = (filters, setFilters) => ORG_FILTERS.map(([key, allLabel, options, prefix]) => h('select', { key, 'aria-label': prefix, value: filters[key], onChange: (event) => setFilters((current) => ({ ...current, [key]: event.target.value })) },
+    h('option', { value: '' }, allLabel), options.map(([value, label]) => h('option', { key: value, value }, (key === 'type' ? '' : prefix + ': ') + label))));
+
 function OrganizationTable({ rows, loading, onSelect }) {
-    const headings = ['Organization', 'Owner', 'People', 'Current plan', 'SMS access', 'SMS ends', ''];
+    const headings = ['Organization', 'Owner', 'People', 'Scan plan', 'SMS', 'SMS dates', ''];
     const body = loading
         ? h('tr', null, h('td', { colSpan: 7, className: 'sa-empty' }, 'Loading organizations…'))
         : rows.length
@@ -70,8 +79,8 @@ function OrganizationTable({ rows, loading, onSelect }) {
                 h('td', null, row.owner ? h('div', null, h('strong', null, row.owner.name), h('small', null, row.owner.email)) : '—'),
                 h('td', null, row.people_count || 0),
                 h('td', null, h('strong', null, row.current_plan?.label || '—'), h('small', null, planDetail(row.current_plan))),
-                h('td', null, h(Status, { value: row.sms_access_status })),
-                h('td', null, formatDate(row.sms_expires_at)), h('td', { className: 'sa-arrow' }, h(Icon, { name: 'chevronRight' }))))
+                h('td', null, h(Status, { value: smsStatusText(row.current_plan?.sms), tone: { on: 'active', scheduled: 'scheduled' }[row.current_plan?.sms?.state] || 'disabled' })),
+                h('td', null, smsDateText(row.current_plan?.sms, row.sms_resumable_until)), h('td', { className: 'sa-arrow' }, h(Icon, { name: 'chevronRight' }))))
             : h('tr', null, h('td', { colSpan: 7, className: 'sa-empty' }, 'No organizations match your search.'));
     return h('div', { className: 'sa-table-wrap' }, h('table', { className: 'sa-table' },
         h('thead', null, h('tr', null, headings.map((heading) => h('th', { key: heading }, heading)))),
@@ -289,15 +298,15 @@ function Drawer({ organization, onClose, onRefresh }) {
 }
 
 export function SuperAdminPage({ user, onAuthenticated }) {
-    const [dashboard, setDashboard] = useState(null); const [rows, setRows] = useState([]); const [requests, setRequests] = useState([]); const [payments, setPayments] = useState([]); const [selected, setSelected] = useState(null); const [reviewPayment, setReviewPayment] = useState(null); const [tab, setTab] = useState('overview'); const [search, setSearch] = useState(''); const [filter, setFilter] = useState(''); const [paymentStatus, setPaymentStatus] = useState('pending'); const [paymentSearch, setPaymentSearch] = useState(''); const [loading, setLoading] = useState(true); const [paymentsLoading, setPaymentsLoading] = useState(false); const [requestsLoading, setRequestsLoading] = useState(false); const [error, setError] = useState(null);
+    const [dashboard, setDashboard] = useState(null); const [rows, setRows] = useState([]); const [requests, setRequests] = useState([]); const [payments, setPayments] = useState([]); const [selected, setSelected] = useState(null); const [reviewPayment, setReviewPayment] = useState(null); const [tab, setTab] = useState('overview'); const [search, setSearch] = useState(''); const [filters, setFilters] = useState({ plan: '', sms: '', type: '' }); const [orgTotal, setOrgTotal] = useState(null); const [paymentStatus, setPaymentStatus] = useState('pending'); const [paymentSearch, setPaymentSearch] = useState(''); const [loading, setLoading] = useState(true); const [paymentsLoading, setPaymentsLoading] = useState(false); const [requestsLoading, setRequestsLoading] = useState(false); const [error, setError] = useState(null);
     const loadDashboard = async () => { try { setDashboard(await get(api('/dashboard'))); } catch (caught) { setError(caught.message); } };
-    const loadOrganizations = async () => { setLoading(true); try { const result = await get(api('/organizations?search=' + encodeURIComponent(search) + '&filter=' + filter)); setRows(result.data || []); } catch (caught) { setError(caught.message); } finally { setLoading(false); } };
+    const loadOrganizations = async () => { setLoading(true); try { const result = await get(api('/organizations?' + new URLSearchParams({ search, ...filters, per_page: 100 }))); setRows(result.data || []); setOrgTotal(result.total ?? (result.data || []).length); } catch (caught) { setError(caught.message); } finally { setLoading(false); } };
     const select = async (id) => { try { setSelected((await get(api('/organizations/' + id))).organization); } catch (caught) { setError(caught.message); } };
     const loadRequests = async () => { setRequestsLoading(true); try { const result = await get(api('/sms-requests?status=pending')); setRequests((result.data || []).filter((request) => request.status === 'pending')); } catch (caught) { setError(caught.message); } finally { setRequestsLoading(false); } };
     const loadPayments = async () => { setPaymentsLoading(true); try { const result = await get(api('/billing/payments?status=' + paymentStatus + '&search=' + encodeURIComponent(paymentSearch))); setPayments(result.data || []); } catch (caught) { setError(caught.message); } finally { setPaymentsLoading(false); } };
     const refresh = async () => { await Promise.all([loadDashboard(), loadOrganizations(), loadPayments()]); if (selected) await select(selected.id); };
     useEffect(() => { loadDashboard(); loadOrganizations(); loadRequests(); loadPayments(); }, []);
-    useEffect(() => { const timer = setTimeout(loadOrganizations, 250); return () => clearTimeout(timer); }, [search, filter]);
+    useEffect(() => { const timer = setTimeout(loadOrganizations, 250); return () => clearTimeout(timer); }, [search, filters.plan, filters.sms, filters.type]);
     useEffect(() => { const timer = setTimeout(loadPayments, 250); return () => clearTimeout(timer); }, [paymentStatus, paymentSearch]);
     const signOut = async () => { await logout(); onAuthenticated(null); };
     const navItems = [['overview', 'Overview', 'home'], ['organizations', 'Organizations', 'grid'], ['requests', 'SMS Requests', 'mail'], ['payments', 'Payments', 'card']];
@@ -315,7 +324,7 @@ export function SuperAdminPage({ user, onAuthenticated }) {
             h('div', { className: 'sa-page-heading' }, h('div', null, h('p', { className: 'sa-eyebrow' }, 'SUPER ADMIN'), h('h1', null, tab === 'overview' ? 'Good morning, ' + user.name.split(' ')[0] : tab === 'organizations' ? 'Organizations' : tab === 'requests' ? 'SMS Requests' : 'Payments'), h('p', null, 'Keep subscriber access and payment records up to date.')), h('span', { className: 'sa-date' }, new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' }))),
             error && h('div', { className: 'sa-error' }, error),
             tab === 'overview' && dashboard && h(React.Fragment, null, h('div', { className: 'sa-stats' }, h(Stat, { label: 'Total organizations', value: dashboard.total_organizations, tone: 'blue' }), h(Stat, { label: 'Active SMS subscribers', value: dashboard.active_sms_subscribers, tone: 'green' }), h(Stat, { label: 'Expired SMS access', value: dashboard.expired_sms_subscribers, tone: 'amber' })), h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Recent payments'), h('p', null, 'Newest submitted first')), h('button', { className: 'sa-link-button', onClick: () => setTab('payments') }, 'View all ', h(Icon, { name: 'chevronRight' }))), h('div', { className: 'sa-recent-list' }, h(PaymentRows, { payments: dashboard.recent_payments })))),
-            (tab === 'overview' || tab === 'organizations') && h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Organizations'), h('p', null, 'Search and manage subscriber access')), refreshLabel('Refresh', refresh)), h('div', { className: 'sa-toolbar' }, h('div', { className: 'sa-search-wrap' }, h(Icon, { name: 'search' }), h('input', { className: 'sa-search', placeholder: 'Search organization, owner, or email…', value: search, onChange: (event) => setSearch(event.target.value) })), h('select', { value: filter, onChange: (event) => setFilter(event.target.value) }, h('option', { value: '' }, 'All organizations'), h('option', { value: 'sms_enabled' }, 'Active SMS'), h('option', { value: 'sms_expired' }, 'Expired SMS'), h('option', { value: 'sms_disabled' }, 'SMS disabled'))), h(OrganizationTable, { rows, loading, onSelect: select })),
+            (tab === 'overview' || tab === 'organizations') && h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Organizations'), h('p', null, 'Search and manage subscriber access')), refreshLabel('Refresh', refresh)), h('div', { className: 'sa-toolbar' }, h('div', { className: 'sa-search-wrap' }, h(Icon, { name: 'search' }), h('input', { className: 'sa-search', placeholder: 'Search organization, owner, or email…', value: search, onChange: (event) => setSearch(event.target.value) })), ...orgFilterSelects(filters, setFilters)), h('p', { className: 'sa-muted', style: { margin: '0 20px 12px' } }, loading || orgTotal === null ? '' : `${orgTotal} ${orgTotal === 1 ? 'organization' : 'organizations'}${filters.plan || filters.sms || filters.type || search ? ' match' : ''}`, (filters.plan || filters.sms || filters.type) && h('button', { type: 'button', className: 'sa-link-button', style: { marginLeft: '10px' }, onClick: () => setFilters({ plan: '', sms: '', type: '' }) }, 'Clear filters')), h(OrganizationTable, { rows, loading, onSelect: select })),
             tab === 'requests' && h('div', { className: 'sa-card' }, h('div', { className: 'sa-card-head' }, h('div', null, h('h2', null, 'Pending SMS requests'), h('p', null, 'Organizations waiting for payment confirmation and activation')), refreshLabel('Refresh', loadRequests)), h(RequestTable, { requests, loading: requestsLoading, onSelect: async (id) => { try { const result = await get(api('/sms-requests/' + id)); const organization = await get(api('/organizations/' + result.request.organization.id)); setSelected(organization.organization); } catch (caught) { setError(caught.message); } } })),
             tab === 'payments' && paymentsPanel,
         selected && h(Drawer, { key: selected.id, organization: selected, onClose: () => setSelected(null), onRefresh: refresh }), reviewPayment && h(PaymentReview, { paymentId: reviewPayment, onClose: () => setReviewPayment(null), onDone: async () => { setReviewPayment(null); await refresh(); } }))));

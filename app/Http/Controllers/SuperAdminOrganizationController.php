@@ -15,6 +15,7 @@ use App\Services\SmsPricingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class SuperAdminOrganizationController extends Controller
@@ -40,11 +41,35 @@ class SuperAdminOrganizationController extends Controller
                     }
                 });
             })
-            ->orderBy('name')->paginate(min($request->integer('per_page', 20), 100))->withQueryString();
+            ->when(in_array($request->input('type'), ['school', 'fitness'], true), fn ($query) => $query->where('type', $request->input('type')))
+            ->when($request->input('type') === 'other', fn ($query) => $query->whereNotIn('type', ['school', 'fitness']))
+            ->orderBy('name');
+        $perPage = min($request->integer('per_page', 20), 100);
+        $plan = $request->input('plan');
+        $sms = $request->input('sms');
+        $planFilter = in_array($plan, ['trialing', 'active', 'expired', 'under_review'], true);
+        $smsFilter = in_array($sms, ['on', 'scheduled', 'off'], true);
 
-        $organizations->getCollection()->transform(fn (Organization $organization) => $this->summary($organization, $features, $subscriptions));
+        if (! $planFilter && ! $smsFilter) {
+            $organizations = $organizations->paginate($perPage)->withQueryString();
+            $organizations->getCollection()->transform(fn (Organization $organization) => $this->summary($organization, $features, $subscriptions));
 
-        return response()->json($organizations);
+            return response()->json($organizations);
+        }
+
+        // Plan and SMS status come from the same billing rules the panel uses, so filter on the computed summary.
+        $matches = $organizations->get()
+            ->map(fn (Organization $organization) => $this->summary($organization, $features, $subscriptions))
+            ->filter(function (array $row) use ($plan, $sms, $planFilter, $smsFilter): bool {
+                $current = $row['current_plan'];
+                $planOk = ! $planFilter || ($plan === 'under_review' ? ! empty($current['pending_payment']) : $current['status'] === $plan);
+                $smsState = in_array($current['sms']['state'], ['on', 'scheduled'], true) ? $current['sms']['state'] : 'off';
+
+                return $planOk && (! $smsFilter || $smsState === $sms);
+            })->values();
+        $page = max(1, $request->integer('page', 1));
+
+        return response()->json((new LengthAwarePaginator($matches->forPage($page, $perPage)->values(), $matches->count(), $perPage, $page, ['path' => $request->url()]))->withQueryString());
     }
 
     public function show(Organization $organization, FeatureEntitlementService $features, BaseSubscriptionService $subscriptions): JsonResponse

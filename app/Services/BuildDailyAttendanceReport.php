@@ -108,8 +108,8 @@ class BuildDailyAttendanceReport
             ? $events->filter(fn ($event) => $event->event_type === 'check_out' && $event->occurred_at->greaterThanOrEqualTo($checkIn->occurred_at))->last()
             : $events->filter(fn ($event) => ClassifyDailyAttendance::isNoTimeIn($event))->last();
         $status = $this->classifier->handle($events);
-        // Employees who worked a holiday were not on their schedule, so they are never late that day.
-        if ($status === 'LATE' && $organization->tracksWorkHours() && $this->holidays->nameOn($organization->id, $this->scheduleResolver->scopeOn($person, $localDate->toDateString())[0], $localDate->toDateString())) {
+        // Nobody is expected on a holiday, so anyone who came is present, never late.
+        if ($status === 'LATE' && $this->holidays->nameOn($organization->id, $this->scheduleResolver->scopeOn($person, $localDate->toDateString())[0], $localDate->toDateString())) {
             $status = 'PRESENT';
         }
         $flags = $this->classifier->flags($events, $schedule, $localDate, $localNow);

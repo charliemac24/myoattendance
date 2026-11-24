@@ -198,17 +198,50 @@ class HolidaysTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_schools_keep_recording_scans_on_a_holiday_as_before(): void
+    public function test_school_scans_on_a_holiday_are_recorded_as_present_never_late(): void
     {
         Http::fake();
         $this->tenant('school');
         $group = $this->weekdayGroup('Grade 1', '08:00', '08:15', '15:00');
         $kim = $this->person($group, 'K1', 'Kim');
+        $leo = $this->person($group, 'K2', 'Leo');
         $this->actingAs($this->user)->postJson('/api/holidays', ['name' => 'Founders Day', 'starts_on' => '2026-11-04'])->assertCreated();
 
-        $this->scanOn($kim, '2026-11-04 08:30')->assertJsonPath('code', 'CHECKED_IN')->assertJsonPath('data.attendance_status', 'LATE')->assertJsonMissingPath('data.holiday');
+        // 8:30 AM is past the 8:15 grace, but nobody is expected on a holiday: a plain time in, not Late.
+        $this->scanOn($kim, '2026-11-04 08:30')->assertJsonPath('code', 'CHECKED_IN')->assertJsonPath('data.attendance_status', 'PRESENT')
+            ->assertJsonPath('data.event_type', 'check_in')->assertJsonPath('data.holiday', 'Founders Day')->assertJsonPath('message', 'Checked in on Founders Day.');
+        $this->scanOn($kim, '2026-11-04 12:00')->assertJsonPath('code', 'CHECKED_OUT')->assertJsonPath('message', 'Checked out on Founders Day.');
+        // A first scan at dismissal time is still a time in on a holiday, not a late "no time in" time out.
+        $this->scanOn($leo, '2026-11-04 15:05')->assertJsonPath('code', 'CHECKED_IN')->assertJsonPath('data.attendance_status', 'PRESENT')->assertJsonPath('data.no_time_in', false);
+        // The next school day is back to normal.
+        $this->scanOn($kim, '2026-11-05 08:30')->assertJsonPath('data.attendance_status', 'LATE')->assertJsonMissingPath('data.holiday');
+        $this->now('2026-11-05 20:00');
+
         $daily = $this->actingAs($this->user)->getJson('/api/attendance/report?date=2026-11-04')->json();
-        $this->assertSame(['Founders Day', 'LATE'], [$daily['holiday'], $daily['people'][0]['status']], 'A school scan is still shown as it was scanned.');
+        $statuses = collect($daily['people'])->mapWithKeys(fn (array $row): array => [$row['person']['person_number'] => $row['status']])->all();
+        $this->assertSame(['Founders Day', 'PRESENT', 'PRESENT', 0, 0], [$daily['holiday'], $statuses['K1'], $statuses['K2'], $daily['summary']['absent'], $daily['summary']['late'] ?? 0]);
+        $this->assertSame('Present', $this->monthlyOf($group)['2026-11-04'], 'A holiday scan is never Late in the monthly grid.');
+
+        $days = collect($this->actingAs($this->user)->getJson("/api/people/{$kim->id}/attendance?from=2026-11-04&to=2026-11-05")->json('days'))->keyBy('date');
+        $this->assertSame(['present', 'Founders Day', null], [$days['2026-11-04']['status'], $days['2026-11-04']['holiday'], $days['2026-11-04']['minutes_late']]);
+        $this->assertSame('late', $days['2026-11-05']['status']);
+        Http::assertNothingSent();
+    }
+
+    public function test_a_late_time_in_saved_on_a_holiday_before_this_change_reads_as_present(): void
+    {
+        Http::fake();
+        $this->tenant('school');
+        $group = $this->weekdayGroup('Grade 1', '08:00', '08:15', '15:00');
+        $kim = $this->person($group, 'K1', 'Kim');
+        // Scanned late before the holiday was added: the saved time in is a late one.
+        $this->scanOn($kim, '2026-11-04 08:30')->assertJsonPath('data.attendance_status', 'LATE');
+        $this->actingAs($this->user)->postJson('/api/holidays', ['name' => 'Founders Day', 'starts_on' => '2026-11-04'])->assertCreated();
+        $this->now('2026-11-05 20:00');
+
+        $this->assertSame('PRESENT', $this->actingAs($this->user)->getJson('/api/attendance/report?date=2026-11-04')->json('people.0.status'));
+        $this->assertSame('Present (No time out)', $this->monthlyOf($group)['2026-11-04']);
+        $this->assertSame('present', $this->actingAs($this->user)->getJson("/api/people/{$kim->id}/attendance?from=2026-11-04&to=2026-11-04")->json('days.0.status'));
         Http::assertNothingSent();
     }
 

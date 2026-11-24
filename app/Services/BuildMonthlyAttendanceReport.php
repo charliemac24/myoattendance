@@ -80,8 +80,8 @@ class BuildMonthlyAttendanceReport
                         $status = match ($this->classifier->handle($dayEvents)) {
                             'PRESENT' => 'Present', 'LATE' => 'Late', default => 'Absent',
                         };
-                        // Employees who worked a holiday were not on their schedule, so they are never late that day.
-                        if ($holiday && $organization->tracksWorkHours() && $status === 'Late') {
+                        // Nobody is expected on a holiday, so anyone who came is present, never late.
+                        if ($holiday && $status === 'Late') {
                             $status = 'Present';
                         }
                         $flags = $this->classifier->flags($dayEvents, $schedule, $localDate, $localNow);

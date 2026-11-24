@@ -86,7 +86,7 @@ function showSuccessDialog(result) {
         rows.push(metaRow('Assigned Status', `<span class="scanner-badge ${badgeClass}">${escapeHtml(status)}</span>`));
     }
     if (result.data?.holiday) {
-        rows.push(metaRow('Holiday', `<p class="scanner-meta-value">${escapeHtml(result.data.holiday)} · counted as holiday hours</p>`));
+        rows.push(metaRow('Holiday', `<p class="scanner-meta-value">${escapeHtml(result.data.holiday)}${result.data.rest_day ? ' · counted as holiday hours' : ''}</p>`));
     }
     if (result.data?.visits_today > 1) {
         rows.push(metaRow('Visits Today', `<p class="scanner-meta-value">${escapeHtml(result.data.visits_today)}</p>`));

@@ -86,8 +86,10 @@ class AttendanceTimeline
                 $entry = $this->day($dayEvents, $schedule, $date->copy(), $localNow, $joinedOn->get($person->id), $timezone, $tracksTimeOut);
                 if ($entry !== null) {
                     $entry['holiday'] = $holiday;
-                    if ($workedHoliday) {
+                    if ($holiday !== null) {
+                        // Nobody is expected on a holiday, so anyone who came is present, never late.
                         $entry['status'] = self::PRESENT;
+                        $entry['minutes_late'] = null;
                     }
                     [$entry['group_id'], $entry['subgroup_id']] = [$groupId, $subgroupId];
                     // Hours only make sense on a schedule or rest day, not for open-hours visits.

@@ -73,9 +73,9 @@ class ProcessAttendanceScan
 
             [$shiftDate, $schedule] = $this->shiftFor($organization, $person, $localTime);
             // Employees who work on a holiday are not on their schedule: the hours count as holiday (rest day) hours.
-            // Schools and other organizations keep recording attendance as usual.
-            $holiday = $organization->tracksWorkHours() ? $this->holidays->nameOn($organization->id, $person->group_id, $shiftDate) : null;
-            if ($holiday) {
+            // Schools and other scheduled groups still record time in and out, but nobody is late on a holiday.
+            $holiday = $this->holidays->nameOn($organization->id, $person->group_id, $shiftDate);
+            if ($holiday && $organization->tracksWorkHours()) {
                 $schedule = null;
             }
             // An employee with a schedule on other days is on a rest day; someone with no schedule at all is not set up yet.
@@ -113,7 +113,12 @@ class ProcessAttendanceScan
             $noTimeIn = false;
             if ($slots % 2 === 0) {
                 $periodIndex = intdiv($slots, 2);
-                if ($this->isExitScan($localTime, $windows[$periodIndex], $windows[$periodIndex + 1] ?? null)) {
+                if ($holiday) {
+                    // Nobody is expected on a holiday, so anyone who comes is present, whatever the time.
+                    $status = 'PRESENT';
+                    $eventType = 'check_in';
+                    $direction = 'IN';
+                } elseif ($this->isExitScan($localTime, $windows[$periodIndex], $windows[$periodIndex + 1] ?? null)) {
                     // First scan of this period came at dismissal: save it as a time out with no time in, counted as late.
                     $noTimeIn = true;
                     $status = 'LATE';
@@ -127,6 +132,9 @@ class ProcessAttendanceScan
             $meta = ['schedule_id' => $schedule->id, 'group_id' => $person->group_id, 'subgroup_id' => $person->subgroup_id, 'attendance_date' => $shiftDate];
             if ($noTimeIn) {
                 $meta['no_time_in'] = true;
+            }
+            if ($holiday) {
+                $meta['holiday'] = $holiday;
             }
 
             $event = AttendanceEvent::create([
@@ -143,7 +151,7 @@ class ProcessAttendanceScan
             $result = [
                 'success' => true,
                 'code' => $direction === 'IN' ? 'CHECKED_IN' : 'CHECKED_OUT',
-                'message' => $direction === 'IN' ? 'Attendance checked in.' : ($noTimeIn ? 'Attendance checked out. No time in was recorded today.' : 'Attendance checked out.'),
+                'message' => $holiday ? ($direction === 'IN' ? "Checked in on {$holiday}." : "Checked out on {$holiday}.") : ($direction === 'IN' ? 'Attendance checked in.' : ($noTimeIn ? 'Attendance checked out. No time in was recorded today.' : 'Attendance checked out.')),
                 'data' => [
                     'person' => $this->personData($person),
                     'direction' => $direction,
@@ -154,7 +162,7 @@ class ProcessAttendanceScan
                     'local_time' => $localTime->format('g:i A'),
                     'membership' => $this->membershipData($person, $localTime),
                     'schedule' => ['id' => $schedule->id, 'name' => $schedule->name, 'start_time' => $schedule->start_time, 'late_threshold' => $schedule->late_after, 'periods' => $periods],
-                ],
+                ] + ($holiday ? ['holiday' => $holiday] : []),
             ];
 
             return $this->remember($organization, $scanRequestId, $person, $result);

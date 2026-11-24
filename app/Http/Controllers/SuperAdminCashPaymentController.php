@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bill;
+use App\Models\FeatureEntitlement;
 use App\Models\Organization;
 use App\Models\Payment;
 use App\Services\BillingService;
@@ -37,6 +38,8 @@ class SuperAdminCashPaymentController extends Controller
             'activates' => $activates = $this->activatesFor($bill),
             'activates_label' => Payment::activatesLabel($activates),
             'under_review' => $bill->status === Bill::STATUS_PAYMENT_PENDING || $billing->hasPaymentUnderReview($organization, $bill->bill_type, $bill->id),
+            'starts_on' => $bill->billing_period_start->toDateString(),
+            'sms_can_start_today' => $this->smsCanStartToday($organization, $bill, $billing),
         ]);
     }
 
@@ -47,6 +50,7 @@ class SuperAdminCashPaymentController extends Controller
             // What the school actually handed over; it can differ from the list price (discount, rounding). Coverage is always the full plan.
             'amount' => ['required', 'string', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/', 'not_regex:/^0+(?:\.0+)?$/'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'start_sms_today' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -56,7 +60,11 @@ class SuperAdminCashPaymentController extends Controller
         }
         abort_if($bill->status === Bill::STATUS_PAYMENT_PENDING || $billing->hasPaymentUnderReview($organization, $bill->bill_type, $bill->id), 409, 'This school already sent a payment for this plan that is waiting for review. Activate or reject it in Payments first.');
 
-        $payment = DB::transaction(function () use ($organization, $bill, $data, $request, $activation): Payment {
+        // Base + SMS for a school whose current Base is still running starts with the next period; the admin can
+        // start SMS today as well, free for the days left in the current Base period.
+        $startSmsToday = ($data['start_sms_today'] ?? false) && $this->smsCanStartToday($organization, $bill, $billing);
+
+        $payment = DB::transaction(function () use ($organization, $bill, $data, $request, $activation, $startSmsToday, $billing): Payment {
             $payment = $organization->payments()->create([
                 'bill_id' => $bill->id, 'payment_type' => Payment::TYPE_MONTHLY_BILL, 'status' => Payment::STATUS_PENDING,
                 'amount_minor' => self::toMinor($data['amount']), 'currency' => 'PHP', 'payment_method' => Payment::METHOD_CASH,
@@ -65,10 +73,32 @@ class SuperAdminCashPaymentController extends Controller
             ]);
             $bill->update(['status' => Bill::STATUS_PAYMENT_PENDING]);
 
-            return $activation->activate($payment, $request->user());
+            $payment = $activation->activate($payment, $request->user());
+            if ($startSmsToday) {
+                $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->firstOrFail()
+                    ->update(['starts_at' => $billing->todayFor($organization)->toDateString()]);
+            }
+
+            return $payment;
         });
 
         return response()->json(['payment' => $payment, 'activated' => $activated = $payment->activates(), 'activated_label' => Payment::activatesLabel($activated)], 201);
+    }
+
+    /**
+     * Fixes a recorded cash payment's amount, date received or note. The plan, months and coverage it turned on stay as they are.
+     */
+    public function update(Request $request, Payment $payment): JsonResponse
+    {
+        abort_unless($payment->payment_method === Payment::METHOD_CASH, 404);
+        $data = $request->validate([
+            'amount' => ['required', 'string', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/', 'not_regex:/^0+(?:\.0+)?$/'],
+            'received_at' => ['required', 'date', 'before_or_equal:today'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $payment->update(['amount_minor' => self::toMinor($data['amount']), 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null]);
+
+        return response()->json(['payment' => $payment->fresh(['organization:id,name', 'recordedBy:id,name', 'bill.items'])]);
     }
 
     /**
@@ -80,6 +110,14 @@ class SuperAdminCashPaymentController extends Controller
             'plan' => [$required ? 'required' : 'nullable', Rule::in(Bill::ALL_TYPES)],
             'months' => ['nullable', 'integer', Rule::in(Bill::MONTH_OPTIONS)],
         ]);
+    }
+
+    private function smsCanStartToday(Organization $organization, Bill $bill, BillingService $billing): bool
+    {
+        return $bill->bill_type === Bill::TYPE_PACKAGE
+            && $bill->billing_period_start->toDateString() > $billing->todayFor($organization)->toDateString()
+            && ! in_array($billing->currentPlan($organization)['sms']['state'], ['on', 'scheduled'], true)
+            && ! $billing->currentPlan($organization)['in_trial'];
     }
 
     private static function toMinor(string $amount): int

@@ -597,6 +597,11 @@ class BillingService
         return $bill->fresh(['items', 'payments' => fn ($query) => $query->latest()->latest('id')]);
     }
 
+    public function todayFor(Organization $organization): Carbon
+    {
+        return $this->today($organization);
+    }
+
     private function today(Organization $organization): Carbon
     {
         return Carbon::now($this->timezone($organization))->startOfDay();

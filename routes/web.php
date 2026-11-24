@@ -316,6 +316,7 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('api/super-admin'
     Route::post('/organizations/{organization}/payments', [SuperAdminPaymentController::class, 'store'])->name('payments.store');
     Route::get('/organizations/{organization}/cash-payments/quote', [SuperAdminCashPaymentController::class, 'quote'])->name('cash-payments.quote');
     Route::post('/organizations/{organization}/cash-payments', [SuperAdminCashPaymentController::class, 'store'])->name('cash-payments.store');
+    Route::put('/cash-payments/{payment}', [SuperAdminCashPaymentController::class, 'update'])->name('cash-payments.update');
     Route::post('/organizations/{organization}/sms/enable', [SuperAdminEntitlementController::class, 'enable'])->name('sms.enable');
     Route::post('/organizations/{organization}/sms/extend', [SuperAdminEntitlementController::class, 'extend'])->name('sms.extend');
     Route::post('/organizations/{organization}/sms/disable', [SuperAdminEntitlementController::class, 'disable'])->name('sms.disable');

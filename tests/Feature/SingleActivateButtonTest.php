@@ -365,4 +365,60 @@ class SingleActivateButtonTest extends TestCase
         }
         $this->assertFalse($this->canScan($owner));
     }
+
+    public function test_cash_base_plus_sms_for_a_new_or_expired_school_turns_sms_on_right_away(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=package')->assertOk()
+            ->assertJsonPath('sms_can_start_today', false)
+            ->assertJsonPath('starts_on', '2026-11-10');
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE])->assertCreated();
+
+        $this->assertTrue($this->canSms($owner));
+    }
+
+    public function test_cash_base_plus_sms_while_base_is_running_can_start_sms_today(): void
+    {
+        $owner = $this->owner('active');
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=package')->assertOk()
+            ->assertJsonPath('sms_can_start_today', true)
+            ->assertJsonPath('starts_on', '2026-12-05');
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'start_sms_today' => true])->assertCreated();
+
+        $this->assertTrue($this->canSms($owner));
+        $entitlement = $owner->organization->featureEntitlements()->firstOrFail();
+        $this->assertSame('2026-11-10', $entitlement->starts_at->toDateString());
+        $this->assertSame('2027-01-05', $entitlement->expires_at->toDateString());
+    }
+
+    public function test_cash_base_plus_sms_while_base_is_running_waits_for_the_next_period_when_unticked(): void
+    {
+        $owner = $this->owner('active');
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'start_sms_today' => false])->assertCreated();
+
+        $this->assertFalse($this->canSms($owner));
+        $this->assertSame('2026-12-05', $owner->organization->featureEntitlements()->firstOrFail()->starts_at->toDateString());
+    }
+
+    public function test_recorded_cash_payment_amount_date_and_note_can_be_edited(): void
+    {
+        $owner = $this->owner();
+        $payment = $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'notes' => 'OR 1'])->assertCreated()->json('payment');
+        $expiresBefore = $owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at;
+
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '2500.50', 'received_at' => '2026-11-09', 'notes' => 'OR 2'])->assertOk()
+            ->assertJsonPath('payment.amount_minor', 250050)
+            ->assertJsonPath('payment.notes', 'OR 2');
+        $this->assertSame('2026-11-09', Payment::findOrFail($payment['id'])->paid_at->toDateString());
+        $this->assertTrue($expiresBefore->equalTo($owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at));
+
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '0', 'received_at' => '2026-11-09'])->assertStatus(422);
+        $this->actingAs($owner)->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '1', 'received_at' => '2026-11-09'])->assertForbidden();
+
+        $gcashId = $this->submitProof($this->owner(), Bill::TYPE_BASE, 'NOT-CASH');
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$gcashId, ['amount' => '1', 'received_at' => '2026-11-09'])->assertNotFound();
+    }
 }

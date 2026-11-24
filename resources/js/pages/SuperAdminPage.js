@@ -25,7 +25,7 @@ const svg = {
 const activationLabel = (mode) => ({ immediate: 'Immediately (ends trial)', after_trial: 'After trial', next_payment: 'With next payment' }[mode] || 'With next payment');
 const DAYS_LABEL = { weekdays: 'weekdays', mon_sat: 'Mon–Sat', every_day: 'every day' };
 const estimateText = (estimate) => estimate ? `${estimate.people} people · ${estimate.texts_per_day} text${estimate.texts_per_day === 1 ? '' : 's'}/day · ${DAYS_LABEL[estimate.days] || estimate.days}` : '';
-const billTypeLabel = (bill) => { if (bill?.bill_type === 'sms_now') return 'SMS for the rest of the period (one-time)'; if (bill?.bill_type === 'sms') return 'SMS add-on (old plan)'; const plan = bill?.bill_type === 'package' || (!bill?.bill_type && bill?.items?.some((item) => item.type === 'sms_addon')) ? 'Base + SMS' : 'Base'; const months = bill?.months || 1; return `${plan} · ${months} ${months === 1 ? 'month' : 'months'}`; };
+const billTypeLabel = (bill) => { if (bill?.bill_type === 'sms_now') return 'Add SMS · days left in paid Base (one-time)'; if (bill?.bill_type === 'sms') return 'SMS add-on (old plan)'; const plan = bill?.bill_type === 'package' || (!bill?.bill_type && bill?.items?.some((item) => item.type === 'sms_addon')) ? 'Base + SMS' : 'Base'; const months = bill?.months || 1; return `${plan} · ${months} ${months === 1 ? 'month' : 'months'}`; };
 
 function Icon({ name, color = 'currentColor', className }) {
     return h('span', { className: 'sa-icon' + (className ? ' ' + className : ''), dangerouslySetInnerHTML: { __html: svg[name](color) } });

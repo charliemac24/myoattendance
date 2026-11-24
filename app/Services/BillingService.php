@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 class BillingService
 {
     /**
-     * "Start SMS now" is only offered when at least this many days are left in the paid Base period.
+     * "Add SMS" is only offered when at least this many days are left in the paid Base period.
      */
     public const SMS_NOW_MIN_DAYS = 3;
 
@@ -220,9 +220,8 @@ class BillingService
                 default => 'SMS starts as soon as this payment is approved',
             };
 
-            $sooner = ($currentPlan['sms_now_available'] ?? false) ? ' Need SMS sooner? Use "Start SMS now" above.' : '';
 
-            return ['kind' => 'add_sms', 'message' => "Adds SMS. {$smsStarts}. This payment covers Base + SMS from {$start} to {$end} ({$length}).{$sooner}"];
+            return ['kind' => 'add_sms', 'message' => "Adds SMS. {$smsStarts}. This payment covers Base + SMS from {$start} to {$end} ({$length})."];
         }
         if ($bill->bill_type === Bill::TYPE_BASE && $hasSms) {
             $smsEnd = $currentPlan['sms']['ends_at'] ? Carbon::parse($currentPlan['sms']['ends_at'])->format('M j, Y') : 'the end of your paid period';
@@ -317,7 +316,7 @@ class BillingService
     }
 
     /**
-     * The one-time "Start SMS now" bill for today. It is rebuilt each day so the amount always matches
+     * The one-time "Add SMS" bill for today. It is rebuilt each day so the amount always matches
      * the days left; a bill from an earlier day is retired.
      */
     private function smsNowBill(Organization $organization): Bill
@@ -325,10 +324,10 @@ class BillingService
         $quote = $this->smsNowQuote($organization);
         if (! $quote['available']) {
             throw new \DomainException(match ($quote['reason']) {
-                'too_few_days' => "Start SMS now is not available in the last {$quote['min_days']} days of your paid Base time. Choose Base + SMS for your next payment instead.",
+                'too_few_days' => "Add SMS is not available in the last {$quote['min_days']} days of your paid Base time. Choose Base + SMS for your next payment instead.",
                 'sms_already_on' => 'SMS is already on.',
                 'no_price' => 'SMS pricing has not been set for your organization yet. Request SMS Notifications first.',
-                default => 'Start SMS now is only available while your paid Base period is running.',
+                default => 'Add SMS is only available while your paid Base period is running.',
             });
         }
 
@@ -466,6 +465,10 @@ class BillingService
 
         $smsStopsBeforeBaseEnds = $current['sms']['ends_at'] && $current['base_paid_through']
             && $current['sms']['ends_at'] < Carbon::instance($current['base_paid_through'])->setTimezone($this->timezone($organization))->toDateString();
+        // A paid Base school whose SMS price is ready lands on "Add SMS" (only the SMS days left), not a Base + SMS bill for next period.
+        if ($current['sms']['state'] === 'price_ready' && $current['plan'] !== Bill::TYPE_PACKAGE && $this->smsNowQuote($organization)['available']) {
+            return Bill::TYPE_SMS_NOW;
+        }
         if (($current['plan'] === Bill::TYPE_PACKAGE && ! $smsStopsBeforeBaseEnds) || $current['sms']['state'] === 'price_ready') {
             return Bill::TYPE_PACKAGE;
         }

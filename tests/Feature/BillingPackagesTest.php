@@ -387,7 +387,7 @@ class BillingPackagesTest extends TestCase
         $this->actingAs($this->owner('expired'))->getJson('/api/billing')->assertJsonPath('sms_now.reason', 'not_paid_base');
         $this->actingAs($this->owner('active', smsPricing: false))->getJson('/api/billing')->assertJsonPath('sms_now.reason', 'no_price');
         $this->actingAs($trial)->getJson('/api/billing?type=sms_now')->assertStatus(422)
-            ->assertJsonPath('message', 'Start SMS now is only available while your paid Base period is running.');
+            ->assertJsonPath('message', 'Add SMS is only available while your paid Base period is running.');
 
         $withSms = $this->owner('active');
         $this->approve($this->pay($withSms, $this->billFor($withSms, Bill::TYPE_PACKAGE), 'ALREADY-PKG')->json('payment.id'))->assertOk();
@@ -425,7 +425,7 @@ class BillingPackagesTest extends TestCase
             ->assertJsonPath('sms_now.reason', 'too_few_days')
             ->assertJsonPath('sms_now.days_left', 2);
         $this->actingAs($owner)->getJson('/api/billing?type=sms_now')->assertStatus(422)
-            ->assertJsonPath('message', 'Start SMS now is not available in the last 3 days of your paid Base time. Choose Base + SMS for your next payment instead.');
+            ->assertJsonPath('message', 'Add SMS is not available in the last 3 days of your paid Base time. Choose Base + SMS for your next payment instead.');
 
         $this->travelTo('2026-12-02 02:00:00');
         $owner->refresh();
@@ -681,7 +681,7 @@ class BillingPackagesTest extends TestCase
         $owner = $this->owner('active');
         $this->actingAs($owner)->getJson('/api/billing?type=package')->assertOk()
             ->assertJsonPath('plan_change.kind', 'add_sms')
-            ->assertJsonPath('plan_change.message', 'Adds SMS. SMS starts on Dec 5, 2026, when your paid Base time ends. This payment covers Base + SMS from Dec 5, 2026 to Jan 4, 2027 (1 month). Need SMS sooner? Use "Start SMS now" above.');
+            ->assertJsonPath('plan_change.message', 'Adds SMS. SMS starts on Dec 5, 2026, when your paid Base time ends. This payment covers Base + SMS from Dec 5, 2026 to Jan 4, 2027 (1 month).');
         $expired = $this->owner('expired');
         $this->actingAs($expired)->getJson('/api/billing?type=package')->assertOk()
             ->assertJsonPath('plan_change.message', 'Adds SMS. SMS starts as soon as this payment is approved. This payment covers Base + SMS from Nov 10, 2026 to Dec 9, 2026 (1 month).');

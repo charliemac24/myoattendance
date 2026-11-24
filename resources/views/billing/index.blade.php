@@ -63,7 +63,7 @@
                     <p class="billing-renewal-choice-status" id="billing-sms-now-text"></p>
                     <button type="button" class="billing-renewal-choice-btn" id="billing-sms-now-btn" data-sms-now>
                         <span class="billing-renewal-choice-text">
-                            <span class="billing-renewal-choice-btn-title" id="billing-sms-now-btn-title">Start SMS now</span>
+                            <span class="billing-renewal-choice-btn-title" id="billing-sms-now-btn-title">Add SMS</span>
                             <span class="billing-renewal-choice-btn-caption" id="billing-sms-now-btn-caption"></span>
                         </span>
                         <span class="billing-renewal-choice-check" aria-hidden="true">✓</span>

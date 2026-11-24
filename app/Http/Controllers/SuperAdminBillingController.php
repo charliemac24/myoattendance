@@ -70,7 +70,7 @@ class SuperAdminBillingController extends Controller
                 : null;
 
             if ($bill?->bill_type === Bill::TYPE_SMS_NOW) {
-                // "Start SMS now": SMS from today (or the bill's first day) until the Base period ends. Base is untouched.
+                // "Add SMS": SMS from today (or the bill's first day) until the Base period ends. Base is untouched.
                 $smsStart = collect([now()->startOfDay(), Carbon::parse($bill->billing_period_start->toDateString())])->max();
                 $smsEnd = Carbon::parse($bill->billing_period_end->toDateString())->addDay();
                 $features->coverSmsThrough($payment->organization, $request->user(), $smsStart, $smsEnd);

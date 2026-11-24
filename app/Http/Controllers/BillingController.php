@@ -150,7 +150,7 @@ class BillingController extends Controller
             abort_if($billing->hasPaymentUnderReview($organization, $bill->bill_type, $bill->id), 422, 'Another payment covering the same plan is already under review. Wait for it to be reviewed before paying again.');
             if ($bill->bill_type === Bill::TYPE_SMS_NOW && $bill->status === Bill::STATUS_UNPAID) {
                 $quote = $billing->smsNowQuote($organization);
-                abort_unless($quote['available'], 422, 'Start SMS now is no longer available. Refresh the page to see your options.');
+                abort_unless($quote['available'], 422, 'Add SMS is no longer available. Refresh the page to see your options.');
                 abort_if($bill->billing_period_start->toDateString() !== $quote['start'], 422, 'This SMS amount was for an earlier day. Refresh the page to see today\'s amount.');
             }
             abort_if(self::toMinor($data['amount']) !== (int) $bill->total_minor, 422, 'The amount must match the bill total of PHP '.number_format($bill->total_minor / 100, 2).'. Refresh the page and try again.');

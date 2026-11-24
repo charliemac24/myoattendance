@@ -24,7 +24,7 @@ class Bill extends Model
     public const TYPE_PACKAGE = 'package';
 
     /**
-     * One-time SMS charge for the rest of a paid Base period ("Start SMS now"). Not a plan.
+     * One-time SMS charge for the rest of a paid Base period ("Add SMS"). Not a plan.
      */
     public const TYPE_SMS_NOW = 'sms_now';
 

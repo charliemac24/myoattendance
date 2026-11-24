@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BaseSubscription;
 use App\Models\Bill;
 use App\Models\Organization;
+use App\Models\OrganizationFeatureRequest;
 use App\Models\Payment;
 use App\Models\SmsPricingAgreement;
 use App\Models\User;
@@ -17,7 +18,7 @@ use Tests\TestCase;
 
 /**
  * Super admin has one Activate button per submitted payment. The bill the organization chose when it paid
- * decides what it turns on: Base = Scan only, Base + SMS = Scan + SMS, "Start SMS now" = SMS on top of Scan.
+ * decides what it turns on: Base = Scan only, Base + SMS = Scan + SMS, "Add SMS" = SMS on top of Scan.
  */
 class SingleActivateButtonTest extends TestCase
 {
@@ -158,5 +159,52 @@ class SingleActivateButtonTest extends TestCase
         $this->assertStringNotContainsString('Enable SMS', $page);
         $this->assertStringNotContainsString('Extend SMS access', $page);
         $this->assertStringNotContainsString('/sms/enable', $page);
+    }
+
+    public function test_paid_base_school_is_offered_add_sms_for_the_days_left_only(): void
+    {
+        $owner = $this->owner('active');
+        $baseEnds = $owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at;
+
+        $billing = $this->actingAs($owner)->getJson('/api/billing?type=sms_now')->assertOk()->assertJsonPath('bill_type', Bill::TYPE_SMS_NOW)->assertJsonPath('sms_now.available', true);
+        $this->assertSame($billing->json('sms_now.amount_minor'), $billing->json('current_bill.total_minor'));
+        $this->assertLessThan(49900, $billing->json('current_bill.total_minor'));
+        $this->assertSame(['sms_addon'], array_column($billing->json('current_bill.items'), 'type'));
+
+        $paymentId = $this->submitProof($owner, Bill::TYPE_SMS_NOW, 'ADD-SMS');
+        $this->activate($paymentId)->assertOk()->assertJsonPath('activated', Payment::ACTIVATES_SMS);
+
+        $this->assertTrue($this->canSms($owner));
+        $this->assertTrue($baseEnds->equalTo($owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at));
+    }
+
+    public function test_paid_base_school_whose_sms_price_is_ready_lands_on_add_sms(): void
+    {
+        $owner = $this->owner('active');
+        // The school asked for SMS before its price was set; the price is set now.
+        OrganizationFeatureRequest::create(['organization_id' => $owner->organization_id, 'feature' => OrganizationFeatureRequest::FEATURE_SMS, 'status' => OrganizationFeatureRequest::STATUS_PENDING, 'requested_by' => $owner->id, 'requested_at' => now()]);
+
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()
+            ->assertJsonPath('current_plan.sms.state', 'price_ready')
+            ->assertJsonPath('bill_type', Bill::TYPE_SMS_NOW);
+    }
+
+    public function test_base_plus_sms_is_still_the_choice_without_paid_base_or_in_the_last_days(): void
+    {
+        $expired = $this->owner('expired');
+        $this->actingAs($expired)->getJson('/api/billing?type=package')->assertOk()->assertJsonPath('bill_type', Bill::TYPE_PACKAGE)->assertJsonPath('sms_now.available', false);
+
+        $owner = $this->owner('active');
+        $this->travelTo('2026-12-04 02:00:00');
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()->assertJsonPath('sms_now.available', false)->assertJsonPath('sms_now.reason', 'too_few_days');
+    }
+
+    public function test_billing_page_shows_add_sms_and_hides_base_plus_sms_while_it_is_offered(): void
+    {
+        $script = file_get_contents(resource_path('js/billing.js'));
+
+        $this->assertStringContainsString("button.hidden = type === 'package' && addSmsMode;", $script);
+        $this->assertStringContainsString('Add SMS · ${amount}', $script);
+        $this->assertStringNotContainsString('Start SMS now', $script);
     }
 }

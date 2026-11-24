@@ -75,7 +75,7 @@ class Payment extends Model
 
     /**
      * What approving this payment turns on, decided by the bill the organization chose when it paid
-     * (Base = Scan only, Base + SMS = Scan + SMS, "Start SMS now" = SMS on top of the Scan it already has).
+     * (Base = Scan only, Base + SMS = Scan + SMS, "Add SMS" = SMS on top of the Scan it already has).
      * Payments without a bill are older Base-only submissions.
      */
     public function activates(): string

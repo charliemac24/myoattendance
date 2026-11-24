@@ -186,7 +186,7 @@ function renderBill(billing) {
     }
 
     els.paymentCardTitle.textContent = bill.bill_type === 'sms_now'
-        ? 'Pay for SMS for the rest of this period'
+        ? 'Pay for Add SMS (the days left in your Base time)'
         : `Pay for ${planLabel(bill.bill_type)}, ${monthsLabel(bill.months || 1)}`;
     els.paymentCardSub.textContent = endsSoon && bill.bill_type !== 'sms_now'
         ? `Your current period ends on ${formatDate(accessEnds)}. Pay now so scanning does not stop. We check each GCash payment by hand, and your plan updates once it is approved.`
@@ -278,7 +278,7 @@ function renderCurrentPlan(billing) {
             ? `Off · starts ${formatDate(plan.pending_payment.period_start)} once your Base + SMS payment is approved`
             : 'Off · turns on once your Base + SMS payment is approved')
         : plan.sms.state === 'available' && billing.sms_now?.available
-            ? 'Off · start it today with "Start SMS now" below'
+            ? 'Off · add it today with "Add SMS" below'
             : plan.sms.state === 'on' && plan.sms.ends_at && plan.base_paid_through && plan.sms.ends_at < String(plan.base_paid_through).slice(0, 10)
             ? `On until ${formatDate(plan.sms.ends_at)}, then off (you chose Base after that)`
             : smsStatusText(plan.sms);
@@ -303,6 +303,8 @@ function renderPlanPicker(billing, sms) {
 
     const smsPrice = billing.sms_pricing?.sms_monthly_price_minor;
     const base = billing.subscription.monthly_price_minor;
+    // A Base + SMS payment already under review keeps showing its own plan.
+    const addSmsMode = !!billing.sms_now?.available && !['on', 'scheduled'].includes(billing.current_plan?.sms?.state) && !(billing.bill_type === 'package' && billing.current_bill?.status === 'payment_pending');
     const captions = {
         base: `${formatMoney(base, 'PHP')}/month`,
         package: available.package && smsPrice
@@ -314,6 +316,8 @@ function renderPlanPicker(billing, sms) {
         const caption = button.querySelector('[data-bill-type-caption]');
         if (caption) caption.textContent = captions[type];
         button.dataset.unavailable = available[type] ? '' : '1';
+        // Paid Base with days left: SMS is added with the single "Add SMS" button, so Base + SMS is not offered.
+        button.hidden = type === 'package' && addSmsMode;
         const selected = type === (draftPackage ? 'package' : selectedType);
         button.classList.toggle('is-selected', selected);
         button.setAttribute('aria-pressed', selected ? 'true' : 'false');
@@ -473,7 +477,7 @@ function renderDraftPayment() {
 }
 
 /**
- * "Start SMS now": a one-time SMS charge for the days left in the paid Base period.
+ * "Add SMS": a one-time SMS charge for the days left in the paid Base period. While it is offered, it replaces Base + SMS.
  */
 function renderSmsNow(billing) {
     const quote = billing.sms_now;
@@ -485,7 +489,7 @@ function renderSmsNow(billing) {
     const smsEnds = formatDate(quote.sms_ends_at);
     if (!quote.available) {
         els.smsNowTitle.hidden = true;
-        els.smsNowText.textContent = `Start SMS now is not available in the last ${quote.min_days} days of your paid Base time. Your Base ends on ${smsEnds}, so choose Base + SMS for your next payment.`;
+        els.smsNowText.textContent = `Add SMS is not available in the last ${quote.min_days} days of your paid Base time. Your Base ends on ${smsEnds}, so choose Base + SMS for your next payment.`;
         els.smsNowBtn.hidden = true;
         return;
     }
@@ -498,9 +502,9 @@ function renderSmsNow(billing) {
         ? `${monthsLabel(quote.full_months)} × ${price}${quote.partial_days ? ` + ${partialDays}` : ''}`
         : `${price}/month × ${partialDays}`;
     els.smsNowTitle.hidden = true;
-    els.smsNowText.textContent = `Need SMS before ${smsEnds}? Start it today and pay only for the ${daysLeft} left in your paid Base time (${math} = ${amount}).`;
+    els.smsNowText.textContent = `Add SMS today and pay only for the ${daysLeft} left in your paid Base time (${math} = ${amount}). Your Base dates do not change. When you renew, Base + SMS renews together.`;
     els.smsNowBtn.hidden = false;
-    els.smsNowBtnTitle.textContent = `Start SMS now · ${amount}`;
+    els.smsNowBtnTitle.textContent = `Add SMS · ${amount}`;
     els.smsNowBtnCaption.textContent = `SMS from ${formatDate(quote.start)} until ${smsEnds}`;
     const selected = selectedType === 'sms_now';
     els.smsNowBtn.classList.toggle('is-selected', selected);

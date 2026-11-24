@@ -25,8 +25,8 @@
         .register-sms-group .field-label { width: 100%; }
         .register-sms-group label { display: flex; align-items: center; gap: 6px; }
 
-        /* Desktop: a wider card with the fields in pairs. Below 1024px the mobile layout is unchanged. */
-        @media (min-width: 1024px) {
+        /* Desktop: a wider card with the fields in pairs. Below 768px the mobile layout is unchanged. */
+        @media (min-width: 768px) {
             body { align-items: flex-start; padding: 48px 24px; }
             .register-screen { max-width: 880px; min-height: 0; border: 1px solid #e5e7eb; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.06); }
             .register-screen .native-header { position: static; padding: 20px 32px; }

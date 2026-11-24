@@ -164,15 +164,19 @@ class SuperAdminOrganizationFiltersTest extends TestCase
         $this->assertSame(['Asked For Price'], $this->names(['sms' => 'price_requested']));
     }
 
-    public function test_dashboard_counts_estimated_sms_prices_until_super_admin_sets_the_price(): void
+    public function test_dashboard_counts_estimated_sms_prices_until_super_admin_sets_the_price_and_leaves_out_custom_requests(): void
     {
         $estimated = $this->school('Estimated At Sign-up', 'trialing');
         SmsPricingAgreement::query()->where('organization_id', $estimated->organization_id)->update(['source' => SmsPricingAgreement::SOURCE_ESTIMATE]);
         $this->school('Price Set By Admin', 'active');
+        $alsoAsked = $this->school('Estimate And Custom Request', 'trialing');
+        SmsPricingAgreement::query()->where('organization_id', $alsoAsked->organization_id)->update(['source' => SmsPricingAgreement::SOURCE_ESTIMATE]);
+        OrganizationFeatureRequest::create(['organization_id' => $alsoAsked->organization_id, 'feature' => OrganizationFeatureRequest::FEATURE_SMS, 'status' => OrganizationFeatureRequest::STATUS_PENDING, 'requested_by' => $alsoAsked->id, 'requested_at' => now()]);
 
         $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
         $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('sms_price_estimates', 1);
         $this->assertSame(['Estimated At Sign-up'], $this->names(['sms' => 'price_estimated']));
+        $this->assertSame(['Estimate And Custom Request'], $this->names(['sms' => 'price_requested']));
 
         $this->actingAs($admin)->putJson('/api/super-admin/organizations/'.$estimated->organization_id.'/sms-pricing', ['sms_monthly_price' => '600'])->assertOk();
         $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertJsonPath('sms_price_estimates', 0);

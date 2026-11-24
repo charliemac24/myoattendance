@@ -6,18 +6,23 @@ use Database\Factories\UserFactory;
 use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements CanResetPassword, MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use CanResetPasswordTrait, HasFactory, Notifiable;
+
+    /**
+     * Never sent in JSON. (The #[Hidden] attribute needs a newer Laravel than this app runs, so it was ignored.)
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['password', 'remember_token'];
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
 

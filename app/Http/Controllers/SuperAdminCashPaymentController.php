@@ -44,6 +44,8 @@ class SuperAdminCashPaymentController extends Controller
     {
         $data = $this->validatePlan($request, required: true) + $request->validate([
             'received_at' => ['required', 'date', 'before_or_equal:today'],
+            // What the school actually handed over; it can differ from the list price (discount, rounding). Coverage is always the full plan.
+            'amount' => ['required', 'string', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/', 'not_regex:/^0+(?:\.0+)?$/'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -57,7 +59,7 @@ class SuperAdminCashPaymentController extends Controller
         $payment = DB::transaction(function () use ($organization, $bill, $data, $request, $activation): Payment {
             $payment = $organization->payments()->create([
                 'bill_id' => $bill->id, 'payment_type' => Payment::TYPE_MONTHLY_BILL, 'status' => Payment::STATUS_PENDING,
-                'amount_minor' => $bill->total_minor, 'currency' => 'PHP', 'payment_method' => Payment::METHOD_CASH,
+                'amount_minor' => self::toMinor($data['amount']), 'currency' => 'PHP', 'payment_method' => Payment::METHOD_CASH,
                 'reference_number' => 'CASH-'.now()->format('ymd-His'), 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null,
                 'submitted_by' => $request->user()->id, 'recorded_by' => $request->user()->id,
             ]);
@@ -78,6 +80,13 @@ class SuperAdminCashPaymentController extends Controller
             'plan' => [$required ? 'required' : 'nullable', Rule::in(Bill::ALL_TYPES)],
             'months' => ['nullable', 'integer', Rule::in(Bill::MONTH_OPTIONS)],
         ]);
+    }
+
+    private static function toMinor(string $amount): int
+    {
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+
+        return ((int) $whole * 100) + (int) str_pad(substr($fraction, 0, 2), 2, '0');
     }
 
     private function activatesFor(Bill $bill): string

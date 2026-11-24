@@ -171,21 +171,21 @@ function Drawer({ organization, onClose, onRefresh }) {
     const update = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
     const openMode = setMode;
     // Record cash payment: the plan picks the school's real bill, so the amount always matches what the school would pay.
-    const [cash, setCash] = useState({ plan: null, months: 1, received_at: new Date().toISOString().slice(0, 10), notes: '' });
+    const [cash, setCash] = useState({ plan: null, months: 1, received_at: new Date().toISOString().slice(0, 10), notes: '', amount: '' });
     const [cashQuote, setCashQuote] = useState(null);
     useEffect(() => {
         if (mode !== 'cash') return;
         let cancelled = false;
         setCashQuote(null);
         get(api('/organizations/' + organization.id + '/cash-payments/quote?' + new URLSearchParams({ ...(cash.plan ? { plan: cash.plan } : {}), months: cash.months })))
-            .then((quote) => { if (!cancelled) { setCashQuote(quote); if (!cash.plan) setCash((current) => ({ ...current, plan: quote.plan })); } })
+            .then((quote) => { if (!cancelled) { setCashQuote(quote); setCash((current) => ({ ...current, plan: current.plan || quote.plan, amount: quote.bill ? (quote.bill.total_minor / 100).toFixed(2) : current.amount })); } })
             .catch((caught) => { if (!cancelled) setCashQuote({ error: caught.message }); });
         return () => { cancelled = true; };
     }, [mode, cash.plan, cash.months]);
     const submit = async (event) => {
         event.preventDefault(); setSaving(true); setError(null);
         try {
-            if (mode === 'cash') await post(api('/organizations/' + organization.id + '/cash-payments'), { plan: cash.plan, months: cash.months, received_at: cash.received_at, notes: cash.notes || null });
+            if (mode === 'cash') await post(api('/organizations/' + organization.id + '/cash-payments'), { plan: cash.plan, months: cash.months, received_at: cash.received_at, notes: cash.notes || null, amount: cash.amount });
             if (mode === 'disable') await post(api('/organizations/' + organization.id + '/sms/disable'), {});
             if (mode === 'resume') await post(api('/organizations/' + organization.id + '/sms/resume'), {});
             if (mode === 'sender_name') await put(api('/organizations/' + organization.id + '/sms-sender-name'), { sender_name: values.sender_name || null });
@@ -201,7 +201,9 @@ function Drawer({ organization, onClose, onRefresh }) {
     };
     const field = (label, key, type, required) => h('label', { key }, label, h('input', { type: type || 'text', value: values[key], onChange: update(key), required: !!required }));
     const cashPlans = [['base', 'Base (Scan only)'], ['package', 'Base + SMS (Scan + SMS)'], ['sms_now', 'Add SMS (days left in paid Base)']];
-    const cashBlocked = !cashQuote || cashQuote.error || cashQuote.under_review;
+    const cashAmountMinor = Math.round(Number(cash.amount) * 100);
+    const cashAmountValid = /^\d+(\.\d{1,2})?$/.test(cash.amount || '') && cashAmountMinor > 0;
+    const cashBlocked = !cashQuote || cashQuote.error || cashQuote.under_review || !cashAmountValid;
     const form = mode === 'cash' ? h('form', { className: 'sa-form', onSubmit: submit },
             h('h3', null, 'Record cash payment'),
             h('p', null, 'Use this when the school paid you in cash. Saving records the payment and turns on what it pays for right away, the same as Activate.'),
@@ -209,12 +211,16 @@ function Drawer({ organization, onClose, onRefresh }) {
                 cashPlans.map(([value, label]) => h('option', { key: value, value, disabled: cashQuote?.available_plans && !cashQuote.available_plans[value] }, label + (cashQuote?.available_plans && !cashQuote.available_plans[value] ? ' · not available' : ''))))),
             cash.plan !== 'sms_now' && h('label', null, 'Months', h('select', { value: cash.months, onChange: (event) => setCash((current) => ({ ...current, months: Number(event.target.value) })) }, [1, 3, 6, 12].map((months) => h('option', { key: months, value: months }, months + (months === 1 ? ' month' : ' months'))))),
             h('label', null, 'Date received', h('input', { type: 'date', value: cash.received_at, max: new Date().toISOString().slice(0, 10), required: true, onChange: (event) => setCash((current) => ({ ...current, received_at: event.target.value })) })),
+            h('label', null, 'Amount received (PHP)',
+                h('input', { type: 'number', min: '0.01', step: '0.01', required: true, value: cash.amount, onChange: (event) => setCash((current) => ({ ...current, amount: event.target.value })) }),
+                cashQuote?.bill && cashAmountValid && cashAmountMinor !== cashQuote.bill.total_minor && h('small', { className: 'sa-muted' }, `List price ${formatMoney(cashQuote.bill.total_minor, cashQuote.bill.currency)}. The full plan is still turned on.`),
+                cash.amount !== '' && !cashAmountValid && h('small', { className: 'sa-muted' }, 'Enter an amount above zero.')),
             h('label', null, 'Note (optional, e.g. OR number)', h('input', { type: 'text', value: cash.notes, maxLength: 1000, onChange: (event) => setCash((current) => ({ ...current, notes: event.target.value })) })),
             h('div', { className: 'sa-review-box' },
                 !cashQuote ? h('p', null, 'Loading the amount…')
                     : cashQuote.error ? h('p', null, cashQuote.error)
                     : h(React.Fragment, null,
-                        h('p', null, h('strong', null, formatMoney(cashQuote.bill.total_minor, cashQuote.bill.currency)), ` · turns on ${cashQuote.activates_label}`),
+                        h('p', null, h('strong', null, `List price ${formatMoney(cashQuote.bill.total_minor, cashQuote.bill.currency)}`), ` · turns on ${cashQuote.activates_label}`),
                         h('p', null, `Covers ${formatDate(cashQuote.bill.billing_period_start)} – ${formatDate(cashQuote.bill.billing_period_end)}`),
                         cashQuote.under_review && h('p', null, 'This school already sent a payment for this plan. Activate or reject it in Payments first.'))),
             h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving || cashBlocked }, saving ? 'Saving…' : 'Record cash and activate'))) :

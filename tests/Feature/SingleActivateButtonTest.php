@@ -264,7 +264,12 @@ class SingleActivateButtonTest extends TestCase
 
     private function recordCash(User $owner, array $data): TestResponse
     {
-        return $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments', $data + ['received_at' => '2026-11-10']);
+        $plan = $data['plan'] ?? null;
+        $listPrice = in_array($plan, Bill::ALL_TYPES, true)
+            ? $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan='.$plan.'&months='.($data['months'] ?? 1))->json('bill.total_minor')
+            : null;
+
+        return $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments', $data + ['received_at' => '2026-11-10', 'amount' => $listPrice ? number_format($listPrice / 100, 2, '.', '') : '100.00']);
     }
 
     public function test_cash_for_base_is_recorded_approved_and_turns_on_scan_only(): void
@@ -333,5 +338,31 @@ class SingleActivateButtonTest extends TestCase
 
         $this->actingAs($expired)->postJson('/api/super-admin/organizations/'.$expired->organization_id.'/cash-payments', ['plan' => Bill::TYPE_BASE, 'received_at' => '2026-11-10'])->assertForbidden();
         $this->assertSame(1, Payment::query()->where('organization_id', $expired->organization_id)->count());
+    }
+
+    public function test_cash_records_the_amount_received_but_still_turns_on_the_full_plan(): void
+    {
+        $owner = $this->owner();
+
+        $response = $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'months' => 1, 'amount' => '3000'])->assertCreated()
+            ->assertJsonPath('payment.amount_minor', 300000)
+            ->assertJsonPath('activated', Payment::ACTIVATES_SCAN_AND_SMS);
+
+        $this->assertTrue($this->canScan($owner));
+        $this->assertTrue($this->canSms($owner));
+        $this->assertSame(349800, Bill::findOrFail($response->json('payment.bill_id'))->total_minor);
+        $this->assertSame(Bill::STATUS_PAID, Bill::findOrFail($response->json('payment.bill_id'))->status);
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id)->assertOk()
+            ->assertJsonPath('organization.payments.0.amount_minor', 300000);
+    }
+
+    public function test_cash_amount_must_be_above_zero(): void
+    {
+        $owner = $this->owner();
+
+        foreach (['0', '0.00', '-5', 'abc', '10.555'] as $amount) {
+            $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'amount' => $amount])->assertStatus(422)->assertJsonValidationErrors('amount');
+        }
+        $this->assertFalse($this->canScan($owner));
     }
 }

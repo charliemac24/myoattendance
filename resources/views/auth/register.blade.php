@@ -24,10 +24,26 @@
         .register-sms-group { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; font-size: 13px; }
         .register-sms-group .field-label { width: 100%; }
         .register-sms-group label { display: flex; align-items: center; gap: 6px; }
+
+        /* Desktop: a wider card with the fields in pairs. Below 1024px the mobile layout is unchanged. */
+        @media (min-width: 1024px) {
+            body { align-items: flex-start; padding: 48px 24px; }
+            .register-screen { max-width: 880px; min-height: 0; border: 1px solid #e5e7eb; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.06); }
+            .register-screen .native-header { position: static; padding: 20px 32px; }
+            .register-screen .trial-notice { margin: 28px 32px 0; }
+            .register-screen #form-error { margin: 28px 32px 0 !important; }
+            .register-screen .content-body { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; padding: 28px 32px 32px; }
+            .register-screen .content-body > .register-sms-estimate,
+            .register-screen .content-body > .cf-turnstile,
+            .register-screen .content-body > .btn-primary,
+            .register-screen .content-body > .payment-note { grid-column: 1 / -1; }
+            .register-screen .content-body > .btn-primary { justify-self: center; width: 100%; max-width: 360px; margin-top: 4px; }
+            .register-sms-estimate .field { max-width: calc(50% - 12px); }
+        }
     </style>
 </head>
 <body>
-    <div class="app-screen">
+    <div class="app-screen register-screen">
         <header class="native-header">
             <div class="header-row">
                 <a href="/login" class="back-button" aria-label="Back to sign in">

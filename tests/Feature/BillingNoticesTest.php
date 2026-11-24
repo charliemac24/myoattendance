@@ -97,4 +97,20 @@ class BillingNoticesTest extends TestCase
         $staff = User::factory()->create(['organization_id' => $owner->organization_id, 'role' => 'staff']);
         $this->assertSame([], app(BillingNoticeService::class)->forUser($staff));
     }
+
+    public function test_asking_for_a_new_price_shows_no_notice_until_super_admin_sets_it(): void
+    {
+        $owner = $this->owner();
+        $admin = $this->superAdmin();
+        $this->actingAs($admin)->putJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms-pricing', ['sms_monthly_price' => '1200'])->assertOk();
+        $this->actingAs($owner)->get('/app')->assertOk()->assertDontSee('Your SMS price is ready');
+
+        $this->travel(1)->minutes();
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['people' => 80, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertSuccessful();
+        $this->actingAs($owner)->get('/app')->assertOk()->assertDontSee('Your SMS price is ready');
+
+        $this->travel(1)->minutes();
+        $this->actingAs($admin)->putJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms-pricing', ['sms_monthly_price' => '1800'])->assertOk();
+        $this->actingAs($owner)->get('/app')->assertOk()->assertSee('₱1,800.00/month');
+    }
 }

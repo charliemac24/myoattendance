@@ -361,6 +361,16 @@ function renderPlanPicker(billing, sms) {
 }
 
 /**
+ * The school asked for a custom SMS price and MYO Attendance has not answered yet. A price MYO Attendance set after
+ * the request is the answer (the request itself stays open until the school pays for SMS).
+ */
+function waitingForCustomPrice(sms) {
+    if (sms?.request_status !== 'pending') return false;
+    const pricing = sms.pricing;
+    return !(pricing?.source === 'admin' && pricing.created_at && sms.requested_at && new Date(pricing.created_at) >= new Date(sms.requested_at));
+}
+
+/**
  * The SMS questions (people, texts, days) and the estimated price. Shown only while Base + SMS is picked.
  */
 function renderSmsEstimate(billing, sms) {
@@ -372,20 +382,25 @@ function renderSmsEstimate(billing, sms) {
 
     const estimate = billing.sms_estimate || {};
     const price = billing.sms_pricing?.sms_monthly_price_minor;
-    if (estimate.price_source === 'admin' && price) {
-        const p = document.createElement('p');
-        p.className = 'billing-renewal-choice-status';
-        p.textContent = `Your SMS price is ${formatMoney(price, 'PHP')}/month, set by MYO Attendance. If your numbers change, contact us to update it.`;
-        box.appendChild(p);
-        return;
-    }
     // A custom price was asked for: the answers went with the request, so the questions are not asked again here.
-    if (sms?.request_status === 'pending') {
+    if (waitingForCustomPrice(sms)) {
         const p = document.createElement('p');
         p.className = 'billing-renewal-choice-status';
         p.textContent = price
-            ? `You asked MYO Attendance for a custom SMS price. Until it arrives, Base + SMS uses your estimate of ${formatMoney(price, 'PHP')}/month.`
+            ? `You asked MYO Attendance for a custom SMS price. Until it arrives, Base + SMS uses your ${estimate.price_source === 'admin' ? 'current price' : 'estimate'} of ${formatMoney(price, 'PHP')}/month.`
             : 'You asked MYO Attendance for a custom SMS price. We will send it soon, and you can then pay for Base + SMS here.';
+        box.appendChild(p);
+        return;
+    }
+    if (estimate.price_source === 'admin' && price) {
+        const smsRunning = ['on', 'scheduled'].includes(billing.current_plan?.sms?.state);
+        const p = document.createElement('p');
+        p.className = 'billing-renewal-choice-status';
+        p.textContent = `Your SMS price is ${formatMoney(price, 'PHP')}/month, set by MYO Attendance. ` + (smsRunning
+            ? 'If your numbers change, you can ask for a new price here once your current SMS period ends.'
+            : sms?.request_status === 'pending'
+                ? 'Pay for Base + SMS below to turn SMS on.'
+                : 'If your numbers change, use "Ask for a new SMS price" below.');
         box.appendChild(p);
         return;
     }
@@ -636,21 +651,25 @@ function renderSmsRequest(sms) {
         smsLine('SMS requested. We will send your SMS price soon.');
     }
 
-    // 3. Any school without a price set by MYO Attendance can ask for a custom SMS price, whatever plan is picked.
+    // 3. Any school can ask for a custom SMS price while SMS is not running, whatever plan is picked. A school whose
+    //    price MYO Attendance already set asks for a new one, e.g. when its number of people changes.
     const smsRunning = ['on', 'scheduled'].includes(plan?.sms?.state);
-    if (!smsRunning && sms?.pricing?.source !== 'admin') {
-        if (sms?.request_status === 'pending') {
+    const priceSetByAdmin = sms?.pricing?.source === 'admin';
+    if (!smsRunning) {
+        if (sms?.request_status === 'pending' && !waitingForCustomPrice(sms)) {
+            // MYO Attendance answered the request: the price message under Base + SMS says what to do next.
+        } else if (sms?.request_status === 'pending') {
             if (step !== 'waiting_for_price') smsLine('Custom SMS price requested. We will send your price soon.');
         } else {
             if (customRequestOpen) {
                 els.smsRequest.appendChild(customPriceForm(() => setCustomRequestOpen(false)));
             } else {
-                smsLine('Prefer MYO Attendance to set your SMS price instead of the estimate?');
+                smsLine(priceSetByAdmin ? 'Has your number of people changed? MYO Attendance can work out a new SMS price.' : 'Prefer MYO Attendance to set your SMS price instead of the estimate?');
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'billing-link-btn';
                 button.dataset.smsCustomRequest = '';
-                button.textContent = 'Request a custom SMS price';
+                button.textContent = priceSetByAdmin ? 'Ask for a new SMS price' : 'Request a custom SMS price';
                 button.addEventListener('click', () => setCustomRequestOpen(true));
                 els.smsRequest.appendChild(button);
             }

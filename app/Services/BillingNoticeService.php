@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Bill;
+use App\Models\OrganizationFeatureRequest;
 use App\Models\Payment;
 use App\Models\SmsPricingAgreement;
 use App\Models\User;
@@ -76,7 +77,9 @@ class BillingNoticeService
         $agreement = $plan['sms']['state'] === 'price_ready' && ! $smsPaymentWaiting
             ? $organization->smsPricingAgreements()->where('status', SmsPricingAgreement::STATUS_ACTIVE)->latest('effective_from')->first()
             : null;
-        if ($agreement?->source === SmsPricingAgreement::SOURCE_ADMIN) {
+        // It must also be newer than the request: after asking for a new price, the old one is not the answer.
+        $requestedAt = $agreement ? $organization->featureRequests()->where('feature', OrganizationFeatureRequest::FEATURE_SMS)->where('status', OrganizationFeatureRequest::STATUS_PENDING)->latest('requested_at')->value('requested_at') : null;
+        if ($agreement?->source === SmsPricingAgreement::SOURCE_ADMIN && $requestedAt && $agreement->created_at->gte($requestedAt)) {
             $notices[] = [
                 'key' => 'sms-price-'.$agreement->id,
                 'tone' => 'info',

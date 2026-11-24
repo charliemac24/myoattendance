@@ -234,8 +234,10 @@ class BillingPackagesTest extends TestCase
 
         $this->assertSame('pay_package', $this->smsAccess($owner)['next_step']);
         $this->actingAs($owner)->getJson('/api/billing')->assertJsonPath('current_plan.sms.state', 'available');
-        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])
-            ->assertStatus(409)->assertJsonPath('message', 'Your SMS price is already set. Choose Base + SMS on the Billing page to turn SMS on.');
+        // The school may ask for a new price (e.g. more people); Base + SMS keeps the current price until then.
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['activation_mode' => 'immediate', ...self::SMS_ANSWERS])->assertSuccessful();
+        $this->actingAs($owner)->getJson('/api/billing')->assertJsonPath('current_plan.sms.state', 'price_ready');
+        $this->assertSame('pay_package', $this->smsAccess($owner)['next_step']);
 
         $this->travelTo('2027-02-06 01:00:00');
         $owner->refresh();

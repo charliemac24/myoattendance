@@ -62,7 +62,7 @@ class SmsCustomPriceRequestTest extends TestCase
         $this->actingAs($owner)->getJson('/api/billing')->assertOk()->assertJsonPath('current_plan.sms.state', 'on');
     }
 
-    public function test_a_school_with_only_an_estimate_can_still_ask_for_a_custom_price_but_not_once_admin_set_one(): void
+    public function test_a_school_can_ask_for_a_custom_price_over_an_estimate_or_a_new_one_over_an_admin_price(): void
     {
         $owner = $this->expiredSchool();
         $this->actingAs($owner)->postJson('/api/billing/sms-estimate', ['people' => 30, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays'])->assertSuccessful();
@@ -73,7 +73,8 @@ class SmsCustomPriceRequestTest extends TestCase
         $priced = $this->expiredSchool();
         $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
         $this->actingAs($admin)->putJson('/api/super-admin/organizations/'.$priced->organization_id.'/sms-pricing', ['sms_monthly_price' => '650'])->assertOk();
-        $this->actingAs($priced)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertStatus(409);
+        $this->actingAs($priced)->postJson('/api/organization/sms/access/request', self::SMS_ANSWERS)->assertSuccessful();
+        $this->assertSame(65000, SmsPricingAgreement::query()->where('organization_id', $priced->organization_id)->where('status', SmsPricingAgreement::STATUS_ACTIVE)->value('sms_monthly_price_minor'));
     }
 
     public function test_a_custom_price_request_needs_people_texts_and_days(): void

@@ -48,7 +48,7 @@ class SuperAdminOrganizationController extends Controller
         $plan = $request->input('plan');
         $sms = $request->input('sms');
         $planFilter = in_array($plan, ['trialing', 'active', 'expired', 'under_review', 'expiring_soon', 'expired_with_sms', 'expired_base_only'], true);
-        $smsFilter = in_array($sms, ['on', 'scheduled', 'off'], true);
+        $smsFilter = in_array($sms, ['on', 'scheduled', 'off', 'price_requested'], true);
 
         if (! $planFilter && ! $smsFilter) {
             $organizations = $organizations->paginate($perPage)->withQueryString();
@@ -71,7 +71,7 @@ class SuperAdminOrganizationController extends Controller
                 };
                 $smsState = in_array($current['sms']['state'], ['on', 'scheduled'], true) ? $current['sms']['state'] : 'off';
 
-                return $planOk && (! $smsFilter || $smsState === $sms);
+                return $planOk && (! $smsFilter || ($sms === 'price_requested' ? self::smsPriceRequested($row) : $smsState === $sms));
             })->values();
         $page = max(1, $request->integer('page', 1));
 
@@ -174,7 +174,8 @@ class SuperAdminOrganizationController extends Controller
         return response()->json(['total_organizations' => $organizations->count(),
             'expiring_soon' => $rows->filter(fn (array $row) => self::expiringSoon($row))->count(),
             'expired_with_sms' => $rows->filter(fn (array $row) => self::expiredWithSms($row))->count(),
-            'expired_base_only' => $rows->filter(fn (array $row) => self::expiredBaseOnly($row))->count(), 'organizations_on_trial' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'trialing')->count(), 'active_subscribers' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'active')->count(), 'expired_subscriptions' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'expired')->count(), 'active_sms_subscribers' => $active, 'expired_sms_subscribers' => $expired, 'pending_sms_requests' => OrganizationFeatureRequest::where('feature', 'sms')->where('status', 'pending')->count(), 'pending_payment_reviews' => Payment::where('status', Payment::STATUS_PENDING)->count(), 'recent_payments' => Payment::with(['organization:id,name', 'recordedBy:id,name'])->latest()->latest('id')->limit(10)->get()->map(fn ($p) => $this->payment($p))]);
+            'expired_base_only' => $rows->filter(fn (array $row) => self::expiredBaseOnly($row))->count(),
+            'sms_price_requests' => $rows->filter(fn (array $row) => self::smsPriceRequested($row))->count(), 'organizations_on_trial' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'trialing')->count(), 'active_subscribers' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'active')->count(), 'expired_subscriptions' => $organizations->filter(fn ($o) => $subscriptions->statusFor($o) === 'expired')->count(), 'active_sms_subscribers' => $active, 'expired_sms_subscribers' => $expired, 'pending_sms_requests' => OrganizationFeatureRequest::where('feature', 'sms')->where('status', 'pending')->count(), 'pending_payment_reviews' => Payment::where('status', Payment::STATUS_PENDING)->count(), 'recent_payments' => Payment::with(['organization:id,name', 'recordedBy:id,name'])->latest()->latest('id')->limit(10)->get()->map(fn ($p) => $this->payment($p))]);
     }
 
     /**
@@ -212,6 +213,16 @@ class SuperAdminOrganizationController extends Controller
         };
 
         return $within($scanEnds) || ($plan['sms']['state'] === 'on' && $within($plan['sms']['ends_at']));
+    }
+
+    /**
+     * The school pressed "Request SMS" on Billing (custom price) and the request is still open.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private static function smsPriceRequested(array $row): bool
+    {
+        return in_array($row['current_plan']['sms']['state'], ['requested', 'price_ready'], true);
     }
 
     /**

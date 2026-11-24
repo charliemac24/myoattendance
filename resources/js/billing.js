@@ -368,7 +368,9 @@ function renderSmsEstimate(billing, sms) {
         return;
     }
 
-    const settings = estimate.settings || { price_per_text_minor: 50, round_to_minor: 5000, days_per_month: { weekdays: 22, mon_sat: 26, every_day: 30 } };
+    // The rate per text comes from the server; there is no built-in SMS price here.
+    const settings = estimate.settings;
+    if (!settings) return;
     const texts = estimate.texts?.length ? estimate.texts : ['time_in', 'time_out'];
     const days = estimate.days || 'weekdays';
     box.innerHTML = `

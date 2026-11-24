@@ -6,6 +6,7 @@ use App\Models\BaseSubscription;
 use App\Models\Bill;
 use App\Models\FeatureEntitlement;
 use App\Models\Organization;
+use App\Models\OrganizationFeatureRequest;
 use App\Models\SmsPricingAgreement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,5 +133,34 @@ class SuperAdminOrganizationFiltersTest extends TestCase
 
         $this->actingAs($admin)->postJson('/api/super-admin/billing/payments/'.$paymentId.'/activate')->assertOk();
         $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('pending_payment_reviews', 0);
+    }
+
+    public function test_a_school_without_an_sms_price_gets_no_made_up_price(): void
+    {
+        $organization = Organization::create(['name' => 'No Price Yet', 'type' => 'school', 'timezone' => 'Asia/Manila']);
+        $owner = User::factory()->create(['organization_id' => $organization->id, 'role' => 'owner']);
+        BaseSubscription::create(['organization_id' => $organization->id, 'subscription_starts_at' => now()->subDays(5), 'subscription_expires_at' => now()->addDays(25), 'status' => 'active']);
+
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()
+            ->assertJsonPath('available_types.base', true)
+            ->assertJsonPath('available_types.package', false)
+            ->assertJsonPath('available_types.sms_now', false)
+            ->assertJsonPath('sms_pricing', null);
+        $this->assertSame(0, SmsPricingAgreement::query()->where('organization_id', $organization->id)->count());
+
+        // The price only comes from the school's own answers (or from super admin).
+        $this->actingAs($owner)->getJson('/api/billing')->assertJsonStructure(['sms_estimate' => ['settings' => ['price_per_text_minor']]]);
+    }
+
+    public function test_dashboard_counts_custom_sms_price_requests_and_lists_those_schools(): void
+    {
+        $asked = $this->school('Asked For Price', 'active');
+        SmsPricingAgreement::query()->where('organization_id', $asked->organization_id)->delete();
+        OrganizationFeatureRequest::create(['organization_id' => $asked->organization_id, 'feature' => OrganizationFeatureRequest::FEATURE_SMS, 'status' => OrganizationFeatureRequest::STATUS_PENDING, 'requested_by' => $asked->id, 'requested_at' => now()]);
+        $this->school('Did Not Ask', 'active');
+
+        $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
+        $this->actingAs($admin)->getJson('/api/super-admin/dashboard')->assertOk()->assertJsonPath('sms_price_requests', 1);
+        $this->assertSame(['Asked For Price'], $this->names(['sms' => 'price_requested']));
     }
 }

@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\BaseSubscriptionService;
 use App\Services\BillingService;
+use App\Services\SmsAccessRequestService;
 use App\Services\SmsPricingService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -27,12 +28,18 @@ use Illuminate\Support\Facades\Storage;
  * - demo-cash / password: expired school, nothing paid, so you can use "Record payment" (Cash) in super admin
  * - demo-gcash / password: expired school that paid by GCash but only messaged you; use "Record payment" (GCash)
  * - demo-bank / password: expired school that paid Base + SMS by bank transfer; use "Record payment" (Bank transfer)
+ * - demo-noprice / password: expired school with no SMS price at all; Billing offers Base only plus "Get your SMS price"
+ * - demo-request / password: Base paid, asked for a custom SMS price; super admin sets the price and sends payment instructions
+ * - demo-priced / password: Base paid, SMS price set by super admin, so Billing shows Base + SMS and Add SMS
+ *
+ * The app has no default SMS price. The demo schools that need one get DEMO_SMS_PRICE_MINOR here, as demo data only.
  */
 class ActivationDemoSeeder extends Seeder
 {
-    private const SMS_PRICE_MINOR = 49900;
+    /** Demo data only: the SMS price given to the demo schools that need one. Real schools get theirs from Billing or super admin. */
+    private const DEMO_SMS_PRICE_MINOR = 49900;
 
-    public function run(BillingService $billing, SmsPricingService $pricing): void
+    public function run(BillingService $billing, SmsPricingService $pricing, SmsAccessRequestService $requests): void
     {
         if (app()->environment('production')) {
             return;
@@ -49,13 +56,20 @@ class ActivationDemoSeeder extends Seeder
             ['demo-cash', 'Activation Demo – Paid in cash', null],
             ['demo-gcash', 'Activation Demo – Paid by GCash message', null],
             ['demo-bank', 'Activation Demo – Paid by bank transfer', null],
+            ['demo-noprice', 'Activation Demo – No SMS price', null],
+            ['demo-request', 'Activation Demo – Custom SMS price requested', null],
+            ['demo-priced', 'Activation Demo – SMS price set', null],
         ] as [$username, $name, $paidPlan]) {
             $school = $this->resetExpiredSchool($name);
             $owner = $this->owner($school, $username);
-            if ($username === 'demo-addsms') {
+            if (in_array($username, ['demo-addsms', 'demo-request', 'demo-priced'], true)) {
                 $this->paidBaseMonth($school, $owner, $admin, now()->subDays(3));
             }
-            $pricing->setPrice($school, $admin, self::SMS_PRICE_MINOR, now()->subMonth()->toDateString(), 'Demo SMS price');
+            if ($username === 'demo-request') {
+                $requests->request($school, $owner);
+            } elseif ($username !== 'demo-noprice') {
+                $pricing->setPrice($school, $admin, self::DEMO_SMS_PRICE_MINOR, now()->subMonth()->toDateString(), 'Demo SMS price (demo data)');
+            }
 
             if ($paidPlan) {
                 $this->submitPayment($school, $owner, $billing->currentBill($school, $paidPlan, 1), strtoupper($username));
@@ -69,6 +83,7 @@ class ActivationDemoSeeder extends Seeder
     private function resetExpiredSchool(string $name): Organization
     {
         $school = Organization::query()->firstOrCreate(['name' => $name], ['type' => 'school', 'timezone' => 'Asia/Manila']);
+        $school->update(['sms_estimate_people' => null, 'sms_estimate_texts' => null, 'sms_estimate_days' => null]);
 
         $school->payments()->each(function (Payment $payment): void {
             $payment->proofs()->delete();

@@ -96,7 +96,9 @@ class PaymentActivationService
             $newEnd = $months > 0 && $oldStart->copy()->addMonthsNoOverflow($months)->eq($oldEnd)
                 ? $now->copy()->addMonthsNoOverflow($months)
                 : $now->copy()->addSeconds((int) $oldStart->diffInSeconds($oldEnd));
-            $subscription->update(['subscription_starts_at' => $now, 'subscription_expires_at' => $newEnd, 'activated_by' => $admin->id]);
+            // Starting paid time now also ends the free trial now, so no trial day is left over after the paid period.
+            $trialEndsAt = $subscription->trial_ends_at && $subscription->trial_ends_at->gt($now) ? $now : $subscription->trial_ends_at;
+            $subscription->update(['subscription_starts_at' => $now, 'subscription_expires_at' => $newEnd, 'trial_ends_at' => $trialEndsAt, 'activated_by' => $admin->id]);
 
             $sms = $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->lockForUpdate()->first();
             if ($sms?->enabled && $sms->starts_at?->toDateString() === $oldStart->toDateString()) {
@@ -110,8 +112,11 @@ class PaymentActivationService
                     if (! $bill) {
                         return;
                     }
-                    // A bill's end date is its last covered day. Unpaid bills for the old dates are rebuilt by BillingService.
-                    $period = ['billing_period_start' => $now->toDateString(), 'billing_period_end' => $newEnd->copy()->subDay()->toDateString()];
+                    // Bill dates are the school's own calendar days, like every other bill: the first day is today
+                    // in its time zone and the last day is the day before the next period starts. Unpaid bills for
+                    // the old dates are rebuilt by BillingService.
+                    $timezone = $organization->timezone ?: config('app.timezone');
+                    $period = ['billing_period_start' => $now->copy()->setTimezone($timezone)->toDateString(), 'billing_period_end' => $newEnd->copy()->setTimezone($timezone)->subDay()->toDateString()];
                     $organization->bills()->whereKeyNot($bill->id)->where('bill_type', $bill->bill_type)
                         ->whereDate('billing_period_start', $period['billing_period_start'])->whereDate('billing_period_end', $period['billing_period_end'])
                         ->where('status', '!=', Bill::STATUS_PAID)->whereDoesntHave('payments')->each(function (Bill $duplicate): void {

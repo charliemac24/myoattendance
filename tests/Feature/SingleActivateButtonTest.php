@@ -519,4 +519,21 @@ class SingleActivateButtonTest extends TestCase
 
         $this->actingAs($admin)->postJson($organizationUrl.'/sms/start-now')->assertStatus(409);
     }
+
+    public function test_started_plan_and_next_bill_line_up_in_the_school_time_zone_with_no_missing_day(): void
+    {
+        // 21:47 UTC on Nov 24 is already Nov 25 in Manila.
+        $this->travelTo('2026-11-24 21:47:00');
+        $owner = $this->owner();
+        $owner->organization->baseSubscription()->update(['trial_ends_at' => now()->addMonth(), 'status' => 'trialing']);
+        $this->activate($this->submitProof($owner, Bill::TYPE_PACKAGE, 'AFTER-TRIAL-TZ'))->assertOk();
+
+        $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms/start-now')->assertOk();
+
+        $paid = $owner->organization->bills()->where('status', Bill::STATUS_PAID)->firstOrFail();
+        $this->assertSame(['2026-11-25', '2026-12-24'], [$paid->billing_period_start->toDateString(), $paid->billing_period_end->toDateString()]);
+        $next = $this->actingAs($owner)->getJson('/api/billing?type='.Bill::TYPE_PACKAGE)->assertOk()->json('current_bill');
+        $this->assertSame('2026-12-25', substr($next['billing_period_start'], 0, 10));
+        $this->assertTrue($owner->organization->baseSubscription()->firstOrFail()->trial_ends_at->lte(now()));
+    }
 }

@@ -17,6 +17,7 @@ use App\Http\Controllers\SmsAccessRequestController;
 use App\Http\Controllers\SmsTemplateController;
 use App\Http\Controllers\SubgroupController;
 use App\Http\Controllers\SuperAdminBillingController;
+use App\Http\Controllers\SuperAdminCashPaymentController;
 use App\Http\Controllers\SuperAdminEntitlementController;
 use App\Http\Controllers\SuperAdminOrganizationController;
 use App\Http\Controllers\SuperAdminPaymentController;
@@ -313,6 +314,8 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('api/super-admin'
     Route::get('/billing/payments/{payment}/proof', [SuperAdminBillingController::class, 'proof'])->name('billing.payments.proof');
     Route::get('/billing/payments/{payment}/proof/view', [SuperAdminBillingController::class, 'proofPreview'])->name('billing.payments.proof.view');
     Route::post('/organizations/{organization}/payments', [SuperAdminPaymentController::class, 'store'])->name('payments.store');
+    Route::get('/organizations/{organization}/cash-payments/quote', [SuperAdminCashPaymentController::class, 'quote'])->name('cash-payments.quote');
+    Route::post('/organizations/{organization}/cash-payments', [SuperAdminCashPaymentController::class, 'store'])->name('cash-payments.store');
     Route::post('/organizations/{organization}/sms/enable', [SuperAdminEntitlementController::class, 'enable'])->name('sms.enable');
     Route::post('/organizations/{organization}/sms/extend', [SuperAdminEntitlementController::class, 'extend'])->name('sms.extend');
     Route::post('/organizations/{organization}/sms/disable', [SuperAdminEntitlementController::class, 'disable'])->name('sms.disable');

@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
  * - demo-sms  / password: expired school, has sent a Base + SMS (Scan + SMS) payment that is waiting for review
  * - demo-pay  / password: expired school with an SMS price set and nothing paid yet, so you can pay yourself
  * - demo-addsms / password: Base paid and activated 3 days ago, no SMS, so you can press "Add SMS", pay, then Activate
+ * - demo-cash / password: expired school, nothing paid, so you can use "Record cash payment" in super admin
  */
 class ActivationDemoSeeder extends Seeder
 {
@@ -43,6 +44,7 @@ class ActivationDemoSeeder extends Seeder
             ['demo-sms', 'Activation Demo – Scan + SMS', Bill::TYPE_PACKAGE],
             ['demo-pay', 'Activation Demo – Pay yourself', null],
             ['demo-addsms', 'Activation Demo – Add SMS later', null],
+            ['demo-cash', 'Activation Demo – Paid in cash', null],
         ] as [$username, $name, $paidPlan]) {
             $school = $this->resetExpiredSchool($name);
             $owner = $this->owner($school, $username);

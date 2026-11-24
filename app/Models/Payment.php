@@ -10,6 +10,9 @@ class Payment extends Model
 {
     public const METHOD_GCASH = 'gcash';
 
+    /** Cash handed to the admin and recorded in super admin; activated in the same step. */
+    public const METHOD_CASH = 'cash';
+
     public const TYPE_BASE_SUBSCRIPTION = 'base_subscription';
 
     public const TYPE_SMS_ADDON = 'sms_addon';

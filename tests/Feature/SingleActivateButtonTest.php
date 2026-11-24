@@ -261,4 +261,77 @@ class SingleActivateButtonTest extends TestCase
         $this->actingAs($admin)->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms/resume')->assertStatus(409);
         $this->assertFalse($this->canSms($owner));
     }
+
+    private function recordCash(User $owner, array $data): TestResponse
+    {
+        return $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments', $data + ['received_at' => '2026-11-10']);
+    }
+
+    public function test_cash_for_base_is_recorded_approved_and_turns_on_scan_only(): void
+    {
+        $owner = $this->owner();
+        $quote = $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=base&months=3')->assertOk()
+            ->assertJsonPath('activates_label', 'Scan only')->assertJsonPath('under_review', false);
+
+        $response = $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'months' => 3, 'notes' => 'OR 1234'])->assertCreated()
+            ->assertJsonPath('activated', Payment::ACTIVATES_SCAN)
+            ->assertJsonPath('payment.status', Payment::STATUS_APPROVED)
+            ->assertJsonPath('payment.payment_method', Payment::METHOD_CASH)
+            ->assertJsonPath('payment.amount_minor', $quote->json('bill.total_minor'));
+
+        $this->assertTrue($this->canScan($owner));
+        $this->assertFalse($this->canSms($owner));
+        $this->assertSame(Bill::STATUS_PAID, Bill::findOrFail($response->json('payment.bill_id'))->status);
+        $this->assertSame(3, Bill::findOrFail($response->json('payment.bill_id'))->months);
+
+        // The school sees it as a paid Cash payment on its Billing page; super admin sees it in both lists.
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()
+            ->assertJsonPath('payments.0.payment_method', Payment::METHOD_CASH)
+            ->assertJsonPath('payments.0.status', Payment::STATUS_APPROVED)
+            ->assertJsonPath('current_plan.status', 'active');
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id)->assertOk()
+            ->assertJsonPath('organization.payments.0.payment_method', Payment::METHOD_CASH)
+            ->assertJsonPath('organization.payments.0.notes', 'OR 1234');
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/billing/payments?status=approved')->assertOk()
+            ->assertJsonPath('data.0.payment_method', Payment::METHOD_CASH)
+            ->assertJsonPath('data.0.recorded_by.id', $response->json('payment.reviewed_by.id'));
+        $this->assertArrayNotHasKey('password', $response->json('payment.reviewed_by'));
+    }
+
+    public function test_cash_for_base_plus_sms_turns_on_scan_and_sms(): void
+    {
+        $owner = $this->owner();
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'months' => 1])->assertCreated()->assertJsonPath('activated', Payment::ACTIVATES_SCAN_AND_SMS);
+
+        $this->assertTrue($this->canScan($owner));
+        $this->assertTrue($this->canSms($owner));
+    }
+
+    public function test_cash_for_add_sms_turns_on_sms_until_base_ends(): void
+    {
+        $owner = $this->owner('active');
+        $baseEnds = $owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at;
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote')->assertOk()
+            ->assertJsonPath('plan', Bill::TYPE_SMS_NOW);
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_SMS_NOW])->assertCreated()->assertJsonPath('activated', Payment::ACTIVATES_SMS);
+
+        $this->assertTrue($this->canSms($owner));
+        $this->assertTrue($baseEnds->equalTo($owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at));
+    }
+
+    public function test_cash_is_refused_for_unavailable_plans_pending_reviews_and_non_admins(): void
+    {
+        $expired = $this->owner();
+        $this->recordCash($expired, ['plan' => Bill::TYPE_SMS_NOW])->assertStatus(422);
+        $this->recordCash($expired, ['plan' => 'gold'])->assertStatus(422);
+        $this->recordCash($expired, ['plan' => Bill::TYPE_BASE, 'received_at' => '2026-12-01'])->assertStatus(422);
+
+        $this->submitProof($expired, Bill::TYPE_BASE, 'WAITING');
+        $this->recordCash($expired, ['plan' => Bill::TYPE_BASE])->assertStatus(409);
+
+        $this->actingAs($expired)->postJson('/api/super-admin/organizations/'.$expired->organization_id.'/cash-payments', ['plan' => Bill::TYPE_BASE, 'received_at' => '2026-11-10'])->assertForbidden();
+        $this->assertSame(1, Payment::query()->where('organization_id', $expired->organization_id)->count());
+    }
 }

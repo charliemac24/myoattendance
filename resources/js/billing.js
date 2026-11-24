@@ -75,6 +75,9 @@ let selectedProof = null;
 let payEarlyRevealed = false;
 let selectedType = null;
 let draftPackage = false;
+// Either/or: the school either answers the questions under Base + SMS (instant estimate) or asks MYO Attendance for a
+// custom price. While the custom price form is open, the Base + SMS questions are hidden, and picking Base + SMS closes it.
+let customRequestOpen = false;
 let selectedMonths = null;
 
 const PLAN_LABELS = { base: 'Base', package: 'Base + SMS', sms_now: 'SMS for the rest of this period', sms: 'SMS add-on (old plan)' };
@@ -362,7 +365,7 @@ function renderPlanPicker(billing, sms) {
  */
 function renderSmsEstimate(billing, sms) {
     const box = els.smsEstimate;
-    const show = draftPackage || selectedType === 'package';
+    const show = !customRequestOpen && (draftPackage || selectedType === 'package');
     box.hidden = !show;
     box.innerHTML = '';
     if (!show) return;
@@ -373,6 +376,16 @@ function renderSmsEstimate(billing, sms) {
         const p = document.createElement('p');
         p.className = 'billing-renewal-choice-status';
         p.textContent = `Your SMS price is ${formatMoney(price, 'PHP')}/month, set by MYO Attendance. If your numbers change, contact us to update it.`;
+        box.appendChild(p);
+        return;
+    }
+    // A custom price was asked for: the answers went with the request, so the questions are not asked again here.
+    if (sms?.request_status === 'pending') {
+        const p = document.createElement('p');
+        p.className = 'billing-renewal-choice-status';
+        p.textContent = price
+            ? `You asked MYO Attendance for a custom SMS price. Until it arrives, Base + SMS uses your estimate of ${formatMoney(price, 'PHP')}/month.`
+            : 'You asked MYO Attendance for a custom SMS price. We will send it soon, and you can then pay for Base + SMS here.';
         box.appendChild(p);
         return;
     }
@@ -476,10 +489,11 @@ function renderDraftPayment() {
     els.scopeSummary.hidden = false;
     els.scopeTitle.textContent = 'Breakdown';
     els.scopeItems.innerHTML = '';
-    els.amountDisplay.textContent = '— (answer the SMS questions first)';
+    const waiting = lastAccess?.request_status === 'pending';
+    els.amountDisplay.textContent = waiting ? '— (waiting for your SMS price)' : '— (answer the SMS questions first)';
     els.submitBtn.disabled = true;
     els.submitBtn.dataset.underReview = '1';
-    els.submitBtn.textContent = 'Answer the SMS questions first';
+    els.submitBtn.textContent = waiting ? 'Waiting for your SMS price' : 'Answer the SMS questions first';
 }
 
 /**
@@ -589,7 +603,8 @@ async function requestSms(activationMode, buttons, answers = {}, statusEl = null
     buttons.forEach((b) => { b.disabled = true; });
     try {
         await post('/api/organization/sms/access/request', { ...(activationMode ? { activation_mode: activationMode } : {}), ...answers });
-        await load();
+        customRequestOpen = false;
+        await load(selectedType, selectedMonths);
     } catch (error) {
         const message = error.message || 'Unable to send your SMS request.';
         if (statusEl) statusEl.textContent = message; else smsLine(message);
@@ -627,21 +642,40 @@ function renderSmsRequest(sms) {
         if (sms?.request_status === 'pending') {
             if (step !== 'waiting_for_price') smsLine('Custom SMS price requested. We will send your price soon.');
         } else {
-            smsLine('Want MYO Attendance to set your SMS price instead of the estimate?');
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'billing-link-btn';
-            button.dataset.smsCustomRequest = '';
-            button.textContent = 'Request a custom SMS price';
-            button.addEventListener('click', () => {
-                button.hidden = true;
-                els.smsRequest.appendChild(customPriceForm(() => { button.hidden = false; }));
-            });
-            els.smsRequest.appendChild(button);
+            if (customRequestOpen) {
+                els.smsRequest.appendChild(customPriceForm(() => setCustomRequestOpen(false)));
+            } else {
+                smsLine('Prefer MYO Attendance to set your SMS price instead of the estimate?');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'billing-link-btn';
+                button.dataset.smsCustomRequest = '';
+                button.textContent = 'Request a custom SMS price';
+                button.addEventListener('click', () => setCustomRequestOpen(true));
+                els.smsRequest.appendChild(button);
+            }
         }
     }
 
     els.smsRequest.hidden = els.smsRequest.childElementCount === 0;
+}
+
+/**
+ * Opens or closes the custom price form. Opening it leaves Base + SMS: the SMS questions there are hidden, and a
+ * Base + SMS bill built from an estimate goes back to Base, since the price will now come from MYO Attendance.
+ */
+function setCustomRequestOpen(open) {
+    customRequestOpen = open;
+    draftPackage = false;
+    if (open && selectedType === 'package') {
+        choosePlan('base', selectedMonths);
+        return;
+    }
+    if (!lastBilling) return;
+    renderPlanPicker(lastBilling, lastAccess);
+    renderSmsRequest(lastAccess);
+    renderBill(lastBilling);
+    if (open) els.smsRequest.querySelector('[data-custom="people"]')?.focus();
 }
 
 /**
@@ -880,6 +914,10 @@ async function choosePlan(type, months) {
 els.typeButtons.forEach((button) => {
     button.addEventListener('click', () => {
         const type = button.dataset.billType;
+        if (type === 'package' && customRequestOpen) {
+            customRequestOpen = false;
+            if (lastAccess) renderSmsRequest(lastAccess);
+        }
         if (type === selectedType && !draftPackage) return;
         // Base + SMS without a price yet: show the SMS questions first; there is no bill to pay until a price exists.
         if (type === 'package' && button.dataset.unavailable) {

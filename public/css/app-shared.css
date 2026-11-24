@@ -4458,3 +4458,26 @@
     .billing-page-content > .billing-card:has(#billing-payment-card-title) { grid-area: pay; position: sticky; top: 84px; }
     .billing-page-content > .billing-card:has(#billing-payment-history) { grid-area: history; }
 }
+
+/* Billing notices on Home, and the count on the Billing menu item. */
+.billing-notices { display: grid; gap: 10px; }
+.billing-notice { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid #bfdbfe; border-radius: 12px; background: #eff6ff; }
+.billing-notice--success { border-color: #bbf7d0; background: #f0fdf4; }
+.billing-notice--danger { border-color: #fecaca; background: #fef2f2; }
+.billing-notice-copy { flex: 1; min-width: 0; }
+.billing-notice-title { margin: 0; color: #0f172a; font-size: 14px; font-weight: 800; }
+.billing-notice-message { margin: 3px 0 0; color: #334155; font-size: 13px; line-height: 1.45; }
+.billing-notice-actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
+.billing-notice-link { padding: 7px 10px; border-radius: 8px; background: #2563eb; color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.billing-notice--success .billing-notice-link { background: #15803d; }
+.billing-notice--danger .billing-notice-link { background: #b91c1c; }
+.billing-notice-dismiss { width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
+.billing-notice-dismiss:hover { background: rgba(15, 23, 42, 0.06); }
+@media (max-width: 480px) {
+    .billing-notice { flex-wrap: wrap; }
+    .billing-notice-actions { width: 100%; justify-content: space-between; }
+}
+.nav-count-badge { min-width: 18px; margin-left: auto; padding: 1px 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; line-height: 16px; text-align: center; }
+.nav-count-badge[hidden], .nav-dot-badge[hidden] { display: none; }
+.bottom-nav-tab { position: relative; }
+.nav-dot-badge { position: absolute; top: 0; right: 14px; width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%; background: #dc2626; }

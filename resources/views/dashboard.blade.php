@@ -15,6 +15,8 @@
     @endphp
 
     <div class="home-body">
+        <x-app.billing-notices />
+
         <div class="home-greeting-row">
             <div class="home-greeting-copy">
                 <p class="home-greeting-title">{{ $greeting }}, {{ $firstName }}</p>

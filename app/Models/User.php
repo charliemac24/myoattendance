@@ -82,6 +82,7 @@ class User extends Authenticatable implements CanResetPassword, MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'dismissed_notices' => 'array',
         ];
     }
 }

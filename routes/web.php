@@ -4,6 +4,7 @@ use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceScanController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\BillingNoticeController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\NeedsAttentionController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TimesheetController;
 use App\Http\Controllers\VerificationController;
 use App\Services\BaseSubscriptionService;
+use App\Services\BillingNoticeService;
 use App\Services\BuildHomeDashboard;
 use App\Support\OrganizationTerminology;
 use Illuminate\Http\RedirectResponse;
@@ -80,8 +82,9 @@ Route::middleware(['auth', 'verified', 'manager'])->get('/sms/templates', functi
 
     return view('sms.templates', compact('user'));
 })->name('sms.templates');
-Route::middleware(['auth', 'verified', 'manager'])->get('/billing', function () {
+Route::middleware(['auth', 'verified', 'manager'])->get('/billing', function (BillingNoticeService $notices) {
     $user = Auth::user();
+    $notices->markBillingSeen($user);
 
     return view('billing.index', compact('user'));
 })->name('billing');
@@ -287,6 +290,7 @@ Route::middleware(['auth', 'verified', 'manager'])->prefix('api')->group(functio
     Route::get('/organization/sms/access', [SmsAccessRequestController::class, 'show']);
     Route::post('/organization/sms/access/request', [SmsAccessRequestController::class, 'store']);
     Route::get('/billing', [BillingController::class, 'show']);
+    Route::post('/billing/notices/{key}/dismiss', [BillingNoticeController::class, 'dismiss']);
     Route::post('/billing/start-choice', [BillingController::class, 'startChoice']);
     Route::post('/billing/sms-estimate', [BillingController::class, 'smsEstimate']);
     Route::post('/billing/payments', [BillingController::class, 'submit']);

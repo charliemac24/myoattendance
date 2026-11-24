@@ -26,6 +26,8 @@
         ['Billing', '/billing', 'file-text-lg', request()->is('billing*')],
         ['Account', '/settings/account', 'user', request()->is('settings/account*')],
     ];
+    // Billing notices (SMS price ready, payment approved or not accepted) the owner or admin has not seen yet.
+    $billingNoticeCount = request()->is('billing*') ? 0 : count(app(\App\Services\BillingNoticeService::class)->forUser(auth()->user()));
 @endphp
 {{-- Desktop sidebar (1024px and wider only); phones keep the bottom bar below. --}}
 <aside class="desktop-sidebar" aria-label="Main menu">
@@ -40,7 +42,7 @@
     @endforeach
     <p class="desktop-sidebar-label">Account</p>
     @foreach ($accountLinks as [$label, $href, $icon, $isActive])
-        <a href="{{ $href }}" class="desktop-sidebar-link {{ $isActive ? 'is-active' : '' }}"><x-dynamic-component :component="'icons.'.$icon" :stroke="$isActive ? '#1D4ED8' : '#475569'" /><span>{{ $label }}</span></a>
+        <a href="{{ $href }}" class="desktop-sidebar-link {{ $isActive ? 'is-active' : '' }}"><x-dynamic-component :component="'icons.'.$icon" :stroke="$isActive ? '#1D4ED8' : '#475569'" /><span>{{ $label }}</span>@if ($href === '/billing')<span class="nav-count-badge" data-billing-badge="{{ $billingNoticeCount }}" @if (! $billingNoticeCount) hidden @endif>{{ $billingNoticeCount }}</span>@endif</a>
     @endforeach
     <button type="button" class="desktop-sidebar-link is-danger" onclick="document.getElementById('more-logout-btn')?.click()"><x-icons.log-out stroke="#DC2626" /><span>Log Out</span></button>
 </aside>
@@ -63,6 +65,7 @@
         </a>
         <button type="button" class="bottom-nav-tab {{ $active === 'more' ? 'is-active' : '' }}" id="more-tab-btn" aria-haspopup="true" aria-expanded="false">
             <x-icons.menu :stroke="$active === 'more' ? '#2563EB' : '#4B5563'" />
+            <span class="nav-dot-badge" data-billing-badge="{{ $billingNoticeCount }}" aria-label="Billing needs a look" @if (! $billingNoticeCount) hidden @endif></span>
             <span>More</span>
         </button>
     </div>
@@ -82,7 +85,7 @@
             <a href="/attendance/timesheet" class="more-sheet-link"><x-icons.clock /><span>Timesheet</span></a>
         @endif
         <a href="/settings/team" class="more-sheet-link"><x-icons.users /><span>Users</span></a>
-        <a href="/billing" class="more-sheet-link"><x-icons.file-text-lg stroke="#4B5563" /><span>Billing</span></a>
+        <a href="/billing" class="more-sheet-link"><x-icons.file-text-lg stroke="#4B5563" /><span>Billing</span><span class="nav-count-badge" data-billing-badge="{{ $billingNoticeCount }}" @if (! $billingNoticeCount) hidden @endif>{{ $billingNoticeCount }}</span></a>
         <a href="/settings/terminology" class="more-sheet-link"><x-icons.tag /><span>Manage Labels</span></a>
         <a href="/sms/templates" class="more-sheet-link"><x-icons.mail /><span>SMS Templates</span></a>
         <a href="/settings/account" class="more-sheet-link"><x-icons.user /><span>Account</span></a>

@@ -86,6 +86,8 @@ class SuperAdminOrganizationController extends Controller
         $entitlement = $organization->featureEntitlements->firstWhere('feature', FeatureEntitlement::SMS);
 
         return response()->json(['organization' => array_merge($this->summary($organization, $features, $subscriptions), [
+            // Set while a paid plan waits for the free trial to end, so super admin can start it today instead.
+            'paid_plan_starts_at' => $organization->baseSubscription()->where('subscription_starts_at', '>', now())->value('subscription_starts_at'),
             'sms_sender_name' => $organization->sms_sender_name,
             'sms_sender_name_effective' => $organization->sms_sender_name ?: config('services.semaphore.sender_name'),
             'payments' => $organization->payments->map(fn (Payment $payment) => $this->payment($payment))->values(),

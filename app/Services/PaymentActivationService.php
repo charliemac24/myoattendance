@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\BaseSubscription;
 use App\Models\Bill;
+use App\Models\FeatureEntitlement;
+use App\Models\Organization;
 use App\Models\OrganizationFeatureRequest;
 use App\Models\Payment;
 use App\Models\User;
@@ -70,6 +73,55 @@ class PaymentActivationService
             $bill?->update(['status' => Bill::STATUS_PAID]);
 
             return $payment->fresh(['organization', 'submittedBy', 'reviewedBy', 'bill.items']);
+        });
+    }
+
+    /**
+     * A paid plan that waits for the free trial to end starts today instead, when the school changes its mind.
+     * The paid length is kept (one month stays one month), so the end date moves earlier by the same amount.
+     * Scan, SMS (if it was paid with the plan), the payment's coverage and the paid bill's dates all move together.
+     */
+    public function startScheduledPlanNow(Organization $organization, User $admin): BaseSubscription
+    {
+        return DB::transaction(function () use ($organization, $admin): BaseSubscription {
+            $subscription = $organization->baseSubscription()->lockForUpdate()->first();
+            $now = now()->utc();
+            if (! $subscription?->subscription_starts_at || ! $subscription->subscription_expires_at || $subscription->subscription_starts_at->lte($now)) {
+                abort(409, 'Nothing paid is waiting to start. This only works while a paid plan is scheduled to start later.');
+            }
+
+            $oldStart = $subscription->subscription_starts_at->copy();
+            $oldEnd = $subscription->subscription_expires_at->copy();
+            $months = (int) round($oldStart->diffInMonths($oldEnd));
+            $newEnd = $months > 0 && $oldStart->copy()->addMonthsNoOverflow($months)->eq($oldEnd)
+                ? $now->copy()->addMonthsNoOverflow($months)
+                : $now->copy()->addSeconds((int) $oldStart->diffInSeconds($oldEnd));
+            $subscription->update(['subscription_starts_at' => $now, 'subscription_expires_at' => $newEnd, 'activated_by' => $admin->id]);
+
+            $sms = $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->lockForUpdate()->first();
+            if ($sms?->enabled && $sms->starts_at?->toDateString() === $oldStart->toDateString()) {
+                $sms->update(['starts_at' => $now->toDateString(), 'expires_at' => $newEnd->toDateString(), 'enabled_by' => $admin->id]);
+            }
+
+            $organization->payments()->where('status', Payment::STATUS_APPROVED)->whereDate('coverage_start', $oldStart->toDateString())->get()
+                ->each(function (Payment $payment) use ($organization, $now, $newEnd): void {
+                    $payment->update(['coverage_start' => $now->toDateString(), 'coverage_end' => $newEnd->toDateString()]);
+                    $bill = $payment->bill()->where('status', Bill::STATUS_PAID)->first();
+                    if (! $bill) {
+                        return;
+                    }
+                    // A bill's end date is its last covered day. Unpaid bills for the old dates are rebuilt by BillingService.
+                    $period = ['billing_period_start' => $now->toDateString(), 'billing_period_end' => $newEnd->copy()->subDay()->toDateString()];
+                    $organization->bills()->whereKeyNot($bill->id)->where('bill_type', $bill->bill_type)
+                        ->whereDate('billing_period_start', $period['billing_period_start'])->whereDate('billing_period_end', $period['billing_period_end'])
+                        ->where('status', '!=', Bill::STATUS_PAID)->whereDoesntHave('payments')->each(function (Bill $duplicate): void {
+                            $duplicate->items()->delete();
+                            $duplicate->delete();
+                        });
+                    $bill->update($period);
+                });
+
+            return $subscription->fresh();
         });
     }
 }

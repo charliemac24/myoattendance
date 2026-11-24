@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use App\Models\OrganizationFeatureRequest;
 use App\Services\FeatureEntitlementService;
+use App\Services\PaymentActivationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,6 +40,14 @@ class SuperAdminEntitlementController extends Controller
     public function resume(Request $request, Organization $organization, FeatureEntitlementService $service): JsonResponse
     {
         return response()->json(['entitlement' => $service->resumeSms($organization, $request->user())]);
+    }
+
+    /**
+     * Starts a paid plan that was waiting for the free trial to end today instead (Scan, and SMS when it was paid with it).
+     */
+    public function startNow(Request $request, Organization $organization, PaymentActivationService $service): JsonResponse
+    {
+        return response()->json(['subscription' => $service->startScheduledPlanNow($organization, $request->user())]);
     }
 
     public function disable(Request $request, Organization $organization, FeatureEntitlementService $service): JsonResponse

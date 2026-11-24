@@ -489,4 +489,34 @@ class SingleActivateButtonTest extends TestCase
         $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'card', 'amount' => '2999', 'received_at' => '2026-11-10'])->assertStatus(422);
         $this->assertTrue($this->canScan($owner));
     }
+
+    public function test_super_admin_can_start_a_plan_waiting_for_the_trial_end_today_with_the_same_length(): void
+    {
+        $owner = $this->owner();
+        $owner->organization->baseSubscription()->update(['trial_ends_at' => now()->addDays(20), 'status' => 'trialing']);
+        $paymentId = $this->submitProof($owner, Bill::TYPE_PACKAGE, 'AFTER-TRIAL');
+        $this->activate($paymentId)->assertOk();
+        $admin = $this->superAdmin();
+        $organizationUrl = '/api/super-admin/organizations/'.$owner->organization_id;
+        $this->assertFalse($this->canSms($owner));
+        $this->actingAs($admin)->getJson($organizationUrl)->assertOk()->assertJsonPath('organization.current_plan.sms.state', 'scheduled')
+            ->assertJsonPath('organization.paid_plan_starts_at', fn ($value) => $value !== null);
+
+        $this->actingAs($owner)->postJson($organizationUrl.'/sms/start-now')->assertForbidden();
+        $this->actingAs($admin)->postJson($organizationUrl.'/sms/start-now')->assertOk();
+
+        $this->assertTrue($this->canSms($owner));
+        $sms = $owner->organization->featureEntitlements()->firstOrFail();
+        $this->assertSame(['2026-11-10', '2026-12-10'], [$sms->starts_at->toDateString(), $sms->expires_at->toDateString()]);
+        $subscription = $owner->organization->baseSubscription()->firstOrFail();
+        $this->assertTrue($subscription->subscription_starts_at->eq(now()));
+        $this->assertSame('2026-12-10', $subscription->subscription_expires_at->toDateString());
+        $payment = Payment::findOrFail($paymentId);
+        $this->assertSame(['2026-11-10', '2026-12-10'], [$payment->coverage_start->toDateString(), $payment->coverage_end->toDateString()]);
+        $this->assertSame(['2026-11-10', '2026-12-09'], [$payment->bill->billing_period_start->toDateString(), $payment->bill->billing_period_end->toDateString()]);
+        $this->actingAs($admin)->getJson($organizationUrl)->assertOk()->assertJsonPath('organization.current_plan.sms.state', 'on')
+            ->assertJsonPath('organization.paid_plan_starts_at', null);
+
+        $this->actingAs($admin)->postJson($organizationUrl.'/sms/start-now')->assertStatus(409);
+    }
 }

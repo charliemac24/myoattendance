@@ -95,7 +95,10 @@
                         <span id="billing-paid-badge-text">Already paid</span>
                     </div>
                     <div class="billing-scope-items" id="billing-paid-items"></div>
-                    <button type="button" class="billing-link-btn" id="billing-pay-early-btn">Pay for the following period now</button>
+                    <div class="billing-pay-early">
+                        <button type="button" class="billing-pay-early-btn" id="billing-pay-early-btn">Pay next period early</button>
+                        <p class="billing-pay-early-note" id="billing-pay-early-note"></p>
+                    </div>
                 </div>
 
                 <div id="billing-payment-form-wrap">

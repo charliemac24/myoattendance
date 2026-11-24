@@ -22,6 +22,7 @@ const els = {
     paidSummary: document.getElementById('billing-paid-summary'),
     paidItems: document.getElementById('billing-paid-items'),
     payEarlyBtn: document.getElementById('billing-pay-early-btn'),
+    payEarlyNote: document.getElementById('billing-pay-early-note'),
     formWrap: document.getElementById('billing-payment-form-wrap'),
     scopeSummary: document.getElementById('billing-scope-summary'),
     scopeTitle: document.getElementById('billing-scope-title'),
@@ -181,6 +182,9 @@ function renderBill(billing) {
 
         els.paidItems.innerHTML = '';
         (paidBill.items || []).forEach((item) => els.paidItems.appendChild(scopeRow(item, paidBill.currency)));
+        // Same last paid day as the badge above, so both dates agree.
+        const paidThrough = paidBill.billing_period_end ? `Your ${planLabel(paidBill.bill_type)} is paid through ${formatDate(paidBill.billing_period_end)}. ` : '';
+        els.payEarlyNote.textContent = `${paidThrough}Pay now for ${formatDate(bill.billing_period_start)} to ${formatDate(bill.billing_period_end)}.`;
         els.scopeSummary.hidden = true;
         return;
     }

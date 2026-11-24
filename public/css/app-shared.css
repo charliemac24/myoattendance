@@ -1033,6 +1033,13 @@
 }
 .billing-link-btn:hover { text-decoration: underline; }
 
+/* "Pay next period early": a real button with the dates it pays for under it. */
+.billing-pay-early { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 10px; border-top: 1px solid #bbf7d0; }
+.billing-pay-early-btn { padding: 9px 16px; border: 1px solid #2563eb; border-radius: 8px; background: #fff; color: #2563eb; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+.billing-pay-early-btn:hover { background: #2563eb; color: #fff; }
+.billing-pay-early-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.billing-pay-early-note { margin: 0; color: #166534; font-size: 12px; line-height: 1.45; }
+
 .billing-sms-choice {
     display: flex;
     flex-direction: column;

@@ -166,6 +166,6 @@ class SuperAdminOrganizationController extends Controller
 
     private function payment(Payment $payment): array
     {
-        return ['id' => $payment->id, 'organization' => $payment->organization, 'payment_type' => $payment->payment_type, 'status' => $payment->status, 'amount_minor' => $payment->amount_minor, 'currency' => $payment->currency, 'payment_method' => $payment->payment_method, 'reference_number' => $payment->reference_number, 'paid_at' => $payment->paid_at, 'coverage_start' => $payment->coverage_start, 'coverage_end' => $payment->coverage_end, 'notes' => $payment->notes, 'recorded_by' => $payment->recordedBy];
+        return ['id' => $payment->id, 'organization' => $payment->organization, 'payment_type' => $payment->payment_type, 'status' => $payment->status, 'amount_minor' => $payment->amount_minor, 'currency' => $payment->currency, 'payment_method' => $payment->payment_method, 'manual_entry' => $payment->manual_entry, 'reference_number' => $payment->reference_number, 'paid_at' => $payment->paid_at, 'coverage_start' => $payment->coverage_start, 'coverage_end' => $payment->coverage_end, 'notes' => $payment->notes, 'recorded_by' => $payment->recordedBy];
     }
 }

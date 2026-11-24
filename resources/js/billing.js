@@ -633,7 +633,9 @@ function renderHistory(payments) {
         pill.classList.add('status-pill--' + (tone[payment.status] || 'info'));
         fragment.querySelector('[data-status-text]').textContent = payment.status;
 
-        fragment.querySelector('[data-ref]').textContent = payment.payment_method === 'cash' ? 'Cash · recorded by Super Admin' : payment.reference_number || '—';
+        fragment.querySelector('[data-ref]').textContent = payment.manual_entry
+            ? `${({ cash: 'Cash', bank_transfer: 'Bank transfer' })[payment.payment_method] || 'GCash'} · recorded by Super Admin${payment.reference_number ? ' · ' + payment.reference_number : ''}`
+            : payment.reference_number || '—';
         if (payment.bill) {
             fragment.querySelector('[data-plan-row]').hidden = false;
             const length = payment.bill.bill_type === 'sms_now' ? '' : `, ${monthsLabel(payment.bill.months || 1)}`;

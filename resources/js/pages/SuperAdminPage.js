@@ -68,15 +68,18 @@ function OrganizationTable({ rows, loading, onSelect }) {
         h('tbody', null, body)));
 }
 
-const paymentSource = (payment) => payment.payment_method === 'cash'
-    ? `Cash · recorded by ${payment.recorded_by?.name || payment.reviewed_by?.name || 'Super Admin'}${payment.notes ? ' · ' + payment.notes : ''}`
+const paymentMethods = [['cash', 'Cash'], ['gcash', 'GCash'], ['bank_transfer', 'Bank transfer']];
+const methodLabel = (method) => (paymentMethods.find(([value]) => value === method) || [null, 'GCash'])[1];
+// Payments typed in with "Record payment" say how they were paid and who recorded them; submitted ones show their reference.
+const paymentSource = (payment) => payment.manual_entry
+    ? `${methodLabel(payment.payment_method)} · recorded by ${payment.recorded_by?.name || payment.reviewed_by?.name || 'Super Admin'}${payment.reference_number ? ' · Ref ' + payment.reference_number : ''}${payment.notes ? ' · ' + payment.notes : ''}`
     : payment.reference_number || 'No reference';
 
 function PaymentRows({ payments, onEditCash }) {
     return payments?.length ? payments.map((payment) => h('div', { className: 'sa-payment', key: payment.id },
         h('div', null, h('strong', null, payment.organization?.name || 'Organization'), h('small', null, formatDate(payment.paid_at) + ' · ' + paymentSource(payment))),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
-            onEditCash && payment.payment_method === 'cash' && h('button', { type: 'button', className: 'sa-link-button', onClick: () => onEditCash(payment) }, 'Edit'),
+            onEditCash && payment.manual_entry && h('button', { type: 'button', className: 'sa-link-button', onClick: () => onEditCash(payment) }, 'Edit'),
             h('strong', null, formatMoney(payment.amount_minor, payment.currency))))) : h('p', { className: 'sa-muted' }, 'No payments recorded yet.');
 }
 
@@ -151,7 +154,7 @@ function PaymentReview({ paymentId, onClose, onDone }) {
 function PaymentReviewTable({ payments, loading, onReview }) {
     if (loading) return h('div', { className: 'sa-empty' }, 'Loading payments…');
     if (!payments.length) return h('div', { className: 'sa-empty' }, 'No payments match this view.');
-    return h('div', { className: 'sa-table-wrap' }, h('table', { className: 'sa-table' }, h('thead', null, h('tr', null, ['Organization', 'Payment for', 'Amount', 'Payment date', 'Reference', 'Status', 'Action'].map((label) => h('th', { key: label }, label)))), h('tbody', null, payments.map((payment) => h('tr', { className: 'sa-row', key: payment.id }, h('td', null, h('strong', null, payment.organization?.name || 'Organization')), h('td', null, h('strong', null, payment.activates_label || 'Scan only'), h('small', null, payment.bill ? billTypeLabel(payment.bill) : 'Base only')), h('td', null, formatMoney(payment.amount_minor, payment.currency)), h('td', null, formatDate(payment.paid_at)), h('td', null, payment.payment_method === 'cash' ? paymentSource(payment) : 'GCash ' + (payment.reference_number || '—')), h('td', null, h(Status, { value: payment.status })), h('td', null, h('button', { className: 'sa-button sa-button--small', onClick: () => onReview(payment.id) }, payment.status === 'pending' ? 'Review' : 'View')))))));
+    return h('div', { className: 'sa-table-wrap' }, h('table', { className: 'sa-table' }, h('thead', null, h('tr', null, ['Organization', 'Payment for', 'Amount', 'Payment date', 'Reference', 'Status', 'Action'].map((label) => h('th', { key: label }, label)))), h('tbody', null, payments.map((payment) => h('tr', { className: 'sa-row', key: payment.id }, h('td', null, h('strong', null, payment.organization?.name || 'Organization')), h('td', null, h('strong', null, payment.activates_label || 'Scan only'), h('small', null, payment.bill ? billTypeLabel(payment.bill) : 'Base only')), h('td', null, formatMoney(payment.amount_minor, payment.currency)), h('td', null, formatDate(payment.paid_at)), h('td', null, payment.manual_entry ? paymentSource(payment) : methodLabel(payment.payment_method) + ' ' + (payment.reference_number || '—')), h('td', null, h(Status, { value: payment.status })), h('td', null, h('button', { className: 'sa-button sa-button--small', onClick: () => onReview(payment.id) }, payment.status === 'pending' ? 'Review' : 'View')))))));
 }
 
 function RequestTable({ requests, loading, onSelect }) {
@@ -172,16 +175,16 @@ function Drawer({ organization, onClose, onRefresh }) {
     const [values, setValues] = useState({ amount: '', reference_number: '', paid_at: new Date().toISOString().slice(0, 16), coverage_start: '', coverage_end: '', notes: '', sender_name: organization.sms_sender_name || '', sms_monthly_price: organization.sms_pricing ? (organization.sms_pricing.sms_monthly_price_minor / 100).toFixed(2) : '', pricing_effective_from: '', pricing_notes: organization.sms_pricing?.notes || '' });
     const update = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
     const openMode = setMode;
-    // Record cash payment: the plan picks the school's real bill, so the amount always matches what the school would pay.
-    const [cash, setCash] = useState({ plan: null, months: 1, received_at: new Date().toISOString().slice(0, 10), notes: '', amount: '', start_sms_today: true });
+    // Record payment (cash, GCash or bank transfer the school didn't submit): the plan picks the school's real bill.
+    const [cash, setCash] = useState({ payment_method: 'cash', reference_number: '', plan: null, months: 1, received_at: new Date().toISOString().slice(0, 10), notes: '', amount: '', start_sms_today: true });
     const [editing, setEditing] = useState(null);
-    const editCash = (payment) => { setEditing({ id: payment.id, amount: (payment.amount_minor / 100).toFixed(2), received_at: String(payment.paid_at).slice(0, 10), notes: payment.notes || '' }); setMode('edit_cash'); };
+    const editCash = (payment) => { setEditing({ id: payment.id, payment_method: payment.payment_method, reference_number: payment.reference_number || '', amount: (payment.amount_minor / 100).toFixed(2), received_at: String(payment.paid_at).slice(0, 10), notes: payment.notes || '' }); setMode('edit_cash'); };
     const [cashQuote, setCashQuote] = useState(null);
     useEffect(() => {
         if (mode !== 'cash') return;
         let cancelled = false;
         setCashQuote(null);
-        get(api('/organizations/' + organization.id + '/cash-payments/quote?' + new URLSearchParams({ ...(cash.plan ? { plan: cash.plan } : {}), months: cash.months })))
+        get(api('/organizations/' + organization.id + '/recorded-payments/quote?' + new URLSearchParams({ ...(cash.plan ? { plan: cash.plan } : {}), months: cash.months })))
             .then((quote) => { if (!cancelled) { setCashQuote(quote); setCash((current) => ({ ...current, plan: current.plan || quote.plan, amount: quote.bill ? (quote.bill.total_minor / 100).toFixed(2) : current.amount })); } })
             .catch((caught) => { if (!cancelled) setCashQuote({ error: caught.message }); });
         return () => { cancelled = true; };
@@ -189,9 +192,9 @@ function Drawer({ organization, onClose, onRefresh }) {
     const submit = async (event) => {
         event.preventDefault(); setSaving(true); setError(null);
         try {
-            if (mode === 'cash') await post(api('/organizations/' + organization.id + '/cash-payments'), { plan: cash.plan, months: cash.months, received_at: cash.received_at, notes: cash.notes || null, amount: cash.amount, start_sms_today: !!(cashQuote?.sms_can_start_today && cash.start_sms_today) });
+            if (mode === 'cash') await post(api('/organizations/' + organization.id + '/recorded-payments'), { payment_method: cash.payment_method, reference_number: cash.reference_number || null, plan: cash.plan, months: cash.months, received_at: cash.received_at, notes: cash.notes || null, amount: cash.amount, start_sms_today: !!(cashQuote?.sms_can_start_today && cash.start_sms_today) });
             if (mode === 'disable') await post(api('/organizations/' + organization.id + '/sms/disable'), {});
-            if (mode === 'edit_cash') await put(api('/cash-payments/' + editing.id), { amount: editing.amount, received_at: editing.received_at, notes: editing.notes || null });
+            if (mode === 'edit_cash') await put(api('/recorded-payments/' + editing.id), { payment_method: editing.payment_method, reference_number: editing.reference_number || null, amount: editing.amount, received_at: editing.received_at, notes: editing.notes || null });
             if (mode === 'resume') await post(api('/organizations/' + organization.id + '/sms/resume'), {});
             if (mode === 'sender_name') await put(api('/organizations/' + organization.id + '/sms-sender-name'), { sender_name: values.sender_name || null });
             if (mode === 'sms_pricing') await put(api('/organizations/' + organization.id + '/sms-pricing'), { sms_monthly_price: values.sms_monthly_price, effective_from: values.pricing_effective_from || null, notes: values.pricing_notes || null });
@@ -210,15 +213,19 @@ function Drawer({ organization, onClose, onRefresh }) {
     const cashAmountValid = /^\d+(\.\d{1,2})?$/.test(cash.amount || '') && cashAmountMinor > 0;
     const cashBlocked = !cashQuote || cashQuote.error || cashQuote.under_review || !cashAmountValid;
     const editForm = editing && h('form', { className: 'sa-form', onSubmit: submit },
-            h('h3', null, 'Edit cash payment'),
-            h('p', null, 'Fix the amount, date received or note. The plan and the dates it turned on do not change. If the wrong plan was recorded, tell the school\'s owner and record the right plan as a new payment.'),
+            h('h3', null, 'Edit recorded payment'),
+            h('p', null, 'Fix how it was paid, the reference, amount, date received or note. The plan and the dates it turned on do not change. If the wrong plan was recorded, tell the school\'s owner and record the right plan as a new payment.'),
+            h('label', null, 'Paid by', h('select', { value: editing.payment_method, onChange: (event) => setEditing((current) => ({ ...current, payment_method: event.target.value })) }, paymentMethods.map(([value, label]) => h('option', { key: value, value }, label)))),
+            h('label', null, editing.payment_method === 'cash' ? 'Reference (optional, e.g. OR number)' : 'Reference number (optional)', h('input', { type: 'text', maxLength: 128, value: editing.reference_number, onChange: (event) => setEditing((current) => ({ ...current, reference_number: event.target.value })) })),
             h('label', null, 'Amount received (PHP)', h('input', { type: 'number', min: '0.01', step: '0.01', required: true, value: editing.amount, onChange: (event) => setEditing((current) => ({ ...current, amount: event.target.value })) })),
             h('label', null, 'Date received', h('input', { type: 'date', required: true, max: new Date().toISOString().slice(0, 10), value: editing.received_at, onChange: (event) => setEditing((current) => ({ ...current, received_at: event.target.value })) })),
             h('label', null, 'Note (optional)', h('input', { type: 'text', maxLength: 1000, value: editing.notes, onChange: (event) => setEditing((current) => ({ ...current, notes: event.target.value })) })),
             h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving || !(Number(editing.amount) > 0) }, saving ? 'Saving…' : 'Save changes')));
     const form = mode === 'edit_cash' && editForm ? editForm : mode === 'cash' ? h('form', { className: 'sa-form', onSubmit: submit },
-            h('h3', null, 'Record cash payment'),
-            h('p', null, 'Use this when the school paid you in cash. Saving records the payment and turns on what it pays for right away, the same as Activate.'),
+            h('h3', null, 'Record payment'),
+            h('p', null, 'Use this when the school paid you directly (cash, GCash or bank transfer) and did not submit it on their Billing page. Saving records the payment and turns on what it pays for right away, the same as Activate.'),
+            h('label', null, 'Paid by', h('select', { value: cash.payment_method, onChange: (event) => setCash((current) => ({ ...current, payment_method: event.target.value })) }, paymentMethods.map(([value, label]) => h('option', { key: value, value }, label)))),
+            h('label', null, cash.payment_method === 'cash' ? 'Reference (optional, e.g. OR number)' : (cash.payment_method === 'gcash' ? 'GCash reference number' : 'Bank reference number') + ' (optional)', h('input', { type: 'text', maxLength: 128, value: cash.reference_number, onChange: (event) => setCash((current) => ({ ...current, reference_number: event.target.value })) })),
             h('label', null, 'Plan', h('select', { value: cash.plan || '', onChange: (event) => setCash((current) => ({ ...current, plan: event.target.value })) },
                 cashPlans.map(([value, label]) => h('option', { key: value, value, disabled: cashQuote?.available_plans && !cashQuote.available_plans[value] }, label + (cashQuote?.available_plans && !cashQuote.available_plans[value] ? ' · not available' : ''))))),
             cash.plan !== 'sms_now' && h('label', null, 'Months', h('select', { value: cash.months, onChange: (event) => setCash((current) => ({ ...current, months: Number(event.target.value) })) }, [1, 3, 6, 12].map((months) => h('option', { key: months, value: months }, months + (months === 1 ? ' month' : ' months'))))),
@@ -227,7 +234,7 @@ function Drawer({ organization, onClose, onRefresh }) {
                 h('input', { type: 'number', min: '0.01', step: '0.01', required: true, value: cash.amount, onChange: (event) => setCash((current) => ({ ...current, amount: event.target.value })) }),
                 cashQuote?.bill && cashAmountValid && cashAmountMinor !== cashQuote.bill.total_minor && h('small', { className: 'sa-muted' }, `List price ${formatMoney(cashQuote.bill.total_minor, cashQuote.bill.currency)}. The full plan is still turned on.`),
                 cash.amount !== '' && !cashAmountValid && h('small', { className: 'sa-muted' }, 'Enter an amount above zero.')),
-            h('label', null, 'Note (optional, e.g. OR number)', h('input', { type: 'text', value: cash.notes, maxLength: 1000, onChange: (event) => setCash((current) => ({ ...current, notes: event.target.value })) })),
+            h('label', null, 'Note (optional)', h('input', { type: 'text', value: cash.notes, maxLength: 1000, onChange: (event) => setCash((current) => ({ ...current, notes: event.target.value })) })),
             h('div', { className: 'sa-review-box' },
                 !cashQuote ? h('p', null, 'Loading the amount…')
                     : cashQuote.error ? h('p', null, cashQuote.error)
@@ -239,7 +246,7 @@ function Drawer({ organization, onClose, onRefresh }) {
                             h('input', { type: 'checkbox', checked: cash.start_sms_today, onChange: (event) => setCash((current) => ({ ...current, start_sms_today: event.target.checked })) }),
                             `Also start SMS today (free until ${formatDate(cashQuote.starts_on)}). Untick to start SMS on ${formatDate(cashQuote.starts_on)}. To charge for SMS days now, choose Add SMS instead.`),
                         cashQuote.under_review && h('p', null, 'This school already sent a payment for this plan. Activate or reject it in Payments first.'))),
-            h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving || cashBlocked }, saving ? 'Saving…' : 'Record cash and activate'))) :
+            h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving || cashBlocked }, saving ? 'Saving…' : 'Record payment and activate'))) :
         mode === 'sender_name' ? h('form', { className: 'sa-form', onSubmit: submit }, h('h3', null, 'SMS sender name'), h('p', null, 'Use 1–11 letters or numbers. Leave blank to use the .env default.'), field('Sender name', 'sender_name', 'text'), h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving }, saving ? 'Saving…' : 'Save sender name'))) :
         mode === 'sms_pricing' ? h('form', { className: 'sa-form', onSubmit: submit }, h('h3', null, organization.sms_pricing ? 'Change SMS price' : 'Set SMS price'), h('p', null, `${organization.active_people_count || 0} active people. The new price applies to bills that start on or after the date below (leave it blank for today). Periods already paid, and payments under review, keep their old price. The school sees the new price on its Billing page.`), organization.sms_pricing && h('p', { className: 'sa-muted' }, `Current price: ${formatMoney(organization.sms_pricing.sms_monthly_price_minor, organization.sms_pricing.currency)}/month`), field('New monthly SMS price (PHP)', 'sms_monthly_price', 'number', true), field('Applies from', 'pricing_effective_from', 'date', false), h('label', null, 'Agreement notes', h('textarea', { value: values.pricing_notes, onChange: update('pricing_notes'), rows: 3 })), h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving }, saving ? 'Saving…' : 'Save pricing'))) :
         mode === 'send_quote' ? h('form', { className: 'sa-form', onSubmit: submit }, h('h3', null, 'Send payment instructions'), h('p', null, 'The agreed SMS price is already visible in the owner billing screen. This marks the quote as ready so the owner can submit the combined base subscription + SMS payment.'), h('div', { className: 'sa-form-actions' }, h('button', { type: 'button', className: 'sa-button sa-button--ghost', onClick: () => setMode(null) }, 'Cancel'), h('button', { className: 'sa-button', disabled: saving }, saving ? 'Sending…' : 'Send payment instructions'))) :
@@ -265,7 +272,7 @@ function Drawer({ organization, onClose, onRefresh }) {
         h('div', { className: 'sa-section' }, h('div', { className: 'sa-section-title' }, h('h3', null, 'SMS pricing'), h('button', { className: 'sa-link-button', onClick: () => setMode('sms_pricing') }, organization.sms_pricing ? 'Change price' : 'Set price')), h('p', { className: 'sa-muted' }, organization.sms_pricing ? `${formatMoney(organization.sms_pricing.sms_monthly_price_minor, organization.sms_pricing.currency)}/month from ${formatDate(organization.sms_pricing.effective_from)} · ${organization.sms_pricing.source === 'estimate' ? 'estimated from the school\'s answers (' + estimateText(organization.sms_estimate) + ')' : 'set by admin'} · ${organization.active_people_count || 0} active people now` : organization.sms_estimate ? `No SMS price yet · school's answers: ${estimateText(organization.sms_estimate)}` : 'No SMS price yet.'), (organization.sms_pricing_history || []).length > 1 && h('div', null, h('small', null, 'Price history'), ...organization.sms_pricing_history.map((item) => h('p', { key: item.id, className: 'sa-muted' }, `${formatMoney(item.sms_monthly_price_minor, item.currency)}/month${item.source === 'estimate' ? ' (estimate)' : ''} · ${formatDate(item.effective_from)} – ${item.effective_until ? formatDate(item.effective_until) : 'now'} · ${item.person_count_snapshot} people${item.created_by?.name ? ' · set by ' + item.created_by.name : ''}${item.notes ? ' · ' + item.notes : ''}`)))),
         h('div', { className: 'sa-section' }, h('div', { className: 'sa-section-title' }, h('h3', null, 'SMS sender name'), h('button', { className: 'sa-link-button', onClick: () => setMode('sender_name') }, 'Edit')), h('p', { className: 'sa-muted' }, organization.sms_sender_name ? organization.sms_sender_name + ' (organization override)' : (organization.sms_sender_name_effective || 'Not configured') + ' (system default)')),
         h('div', { className: 'sa-section' }, h('div', { className: 'sa-section-title' }, h('h3', null, 'Attendance data'), h('button', { className: 'sa-link-button sa-link-button--danger', onClick: () => setMode('delete_attendance') }, 'Delete today’s attendance'))),
-        h('div', { className: 'sa-section' }, h('div', { className: 'sa-section-title' }, h('h3', null, 'Payment history'), h('button', { className: 'sa-link-button', onClick: () => setMode('cash') }, h(Icon, { name: 'plus' }), 'Record cash payment')), h(PaymentRows, { payments: organization.payments, onEditCash: editCash })));
+        h('div', { className: 'sa-section' }, h('div', { className: 'sa-section-title' }, h('h3', null, 'Payment history'), h('button', { className: 'sa-link-button', onClick: () => setMode('cash') }, h(Icon, { name: 'plus' }), 'Record payment')), h(PaymentRows, { payments: organization.payments, onEditCash: editCash })));
     return h('aside', { className: 'sa-drawer' }, h('div', { className: 'sa-drawer-head' }, h('div', null, h('p', { className: 'sa-eyebrow' }, 'ORGANIZATION DETAILS'), h('h2', null, organization.name)), h('button', { className: 'sa-icon-button', onClick: onClose }, h(Icon, { name: 'x' }))), error && h('div', { className: 'sa-error' }, error), mode ? form : details);
 }
 

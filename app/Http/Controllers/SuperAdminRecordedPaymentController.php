@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
- * Cash paid to the admin outside the app: the admin picks the plan, the amount comes from the school's real bill,
- * and saving records the payment as Cash and runs the same Activate step as a submitted payment.
+ * "Record payment": money the school paid outside the Billing page (cash, or GCash / bank transfer they only messaged
+ * about). The admin picks the plan, the bill comes from the school's real billing, and saving runs the same Activate
+ * step as a submitted payment.
  */
-class SuperAdminCashPaymentController extends Controller
+class SuperAdminRecordedPaymentController extends Controller
 {
     public function quote(Request $request, Organization $organization, BillingService $billing): JsonResponse
     {
@@ -51,7 +52,8 @@ class SuperAdminCashPaymentController extends Controller
             'amount' => ['required', 'string', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/', 'not_regex:/^0+(?:\.0+)?$/'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'start_sms_today' => ['nullable', 'boolean'],
-        ]);
+        ] + $this->methodRules());
+        $this->ensureReferenceIsFree($data);
 
         try {
             $bill = $billing->currentBill($organization, $data['plan'], $data['plan'] === Bill::TYPE_SMS_NOW ? null : (int) ($data['months'] ?? 1));
@@ -67,8 +69,8 @@ class SuperAdminCashPaymentController extends Controller
         $payment = DB::transaction(function () use ($organization, $bill, $data, $request, $activation, $startSmsToday, $billing): Payment {
             $payment = $organization->payments()->create([
                 'bill_id' => $bill->id, 'payment_type' => Payment::TYPE_MONTHLY_BILL, 'status' => Payment::STATUS_PENDING,
-                'amount_minor' => self::toMinor($data['amount']), 'currency' => 'PHP', 'payment_method' => Payment::METHOD_CASH,
-                'reference_number' => 'CASH-'.now()->format('ymd-His'), 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null,
+                'amount_minor' => self::toMinor($data['amount']), 'currency' => 'PHP', 'payment_method' => $data['payment_method'], 'manual_entry' => true,
+                'reference_number' => $data['reference_number'] ?? null, 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null,
                 'submitted_by' => $request->user()->id, 'recorded_by' => $request->user()->id,
             ]);
             $bill->update(['status' => Bill::STATUS_PAYMENT_PENDING]);
@@ -86,19 +88,52 @@ class SuperAdminCashPaymentController extends Controller
     }
 
     /**
-     * Fixes a recorded cash payment's amount, date received or note. The plan, months and coverage it turned on stay as they are.
+     * Fixes a recorded payment's method, reference, amount, date received or note. The plan, months and coverage it turned on stay as they are.
      */
     public function update(Request $request, Payment $payment): JsonResponse
     {
-        abort_unless($payment->payment_method === Payment::METHOD_CASH, 404);
+        abort_unless($payment->manual_entry, 404);
         $data = $request->validate([
             'amount' => ['required', 'string', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/', 'not_regex:/^0+(?:\.0+)?$/'],
             'received_at' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
+        ] + $this->methodRules());
+        $this->ensureReferenceIsFree($data, $payment);
+        $payment->update([
+            'payment_method' => $data['payment_method'], 'reference_number' => $data['reference_number'] ?? null,
+            'amount_minor' => self::toMinor($data['amount']), 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null,
         ]);
-        $payment->update(['amount_minor' => self::toMinor($data['amount']), 'paid_at' => $data['received_at'], 'notes' => $data['notes'] ?? null]);
 
         return response()->json(['payment' => $payment->fresh(['organization:id,name', 'recordedBy:id,name', 'bill.items'])]);
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    private function methodRules(): array
+    {
+        return [
+            'payment_method' => ['required', Rule::in(Payment::RECORDABLE_METHODS)],
+            'reference_number' => ['nullable', 'string', 'max:128'],
+        ];
+    }
+
+    /**
+     * A GCash or bank reference can back only one live payment, the same rule as the school's own submissions,
+     * so a payment the school later submits as well is caught.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function ensureReferenceIsFree(array $data, ?Payment $except = null): void
+    {
+        $reference = trim((string) ($data['reference_number'] ?? ''));
+        if ($reference === '') {
+            return;
+        }
+        $inUse = Payment::query()->where('reference_number', $reference)
+            ->whereIn('status', [Payment::STATUS_PENDING, Payment::STATUS_APPROVED])
+            ->when($except, fn ($q) => $q->whereKeyNot($except->id))->exists();
+        abort_if($inUse, 422, 'This reference number is already on another payment.');
     }
 
     /**

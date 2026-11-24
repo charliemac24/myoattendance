@@ -31,7 +31,7 @@ class PaymentActivationService
             if ($bill && ! in_array($bill->bill_type, Bill::ALL_TYPES, true)) {
                 abort(409, 'This payment is for an old plan and cannot be activated here.');
             }
-            if ($bill && ($bill->organization_id !== $payment->organization_id || $bill->status === Bill::STATUS_PAID || ($payment->payment_method !== Payment::METHOD_CASH && $payment->amount_minor !== $bill->total_minor))) {
+            if ($bill && ($bill->organization_id !== $payment->organization_id || $bill->status === Bill::STATUS_PAID || (! $payment->manual_entry && $payment->amount_minor !== $bill->total_minor))) {
                 abort(409, 'The payment does not match the bill or the bill is already paid.');
             }
             $payment->update(['status' => Payment::STATUS_APPROVED, 'reviewed_by' => $admin->id, 'reviewed_at' => now(), 'recorded_by' => $admin->id]);

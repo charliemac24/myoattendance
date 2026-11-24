@@ -13,6 +13,11 @@ class Payment extends Model
     /** Cash handed to the admin and recorded in super admin; activated in the same step. */
     public const METHOD_CASH = 'cash';
 
+    public const METHOD_BANK_TRANSFER = 'bank_transfer';
+
+    /** Methods the super admin can pick in "Record payment". */
+    public const RECORDABLE_METHODS = [self::METHOD_CASH, self::METHOD_GCASH, self::METHOD_BANK_TRANSFER];
+
     public const TYPE_BASE_SUBSCRIPTION = 'base_subscription';
 
     public const TYPE_SMS_ADDON = 'sms_addon';
@@ -34,11 +39,11 @@ class Payment extends Model
 
     public const ACTIVATES_SMS = 'sms';
 
-    protected $fillable = ['organization_id', 'bill_id', 'payment_type', 'status', 'amount_minor', 'currency', 'payment_method', 'reference_number', 'proof_path', 'paid_at', 'payment_time', 'coverage_start', 'coverage_end', 'notes', 'recorded_by', 'submitted_by', 'reviewed_by', 'reviewed_at', 'rejection_reason', 'proof_request_reason', 'proof_requested_by', 'proof_requested_at', 'proof_unavailable'];
+    protected $fillable = ['organization_id', 'bill_id', 'payment_type', 'status', 'amount_minor', 'currency', 'payment_method', 'manual_entry', 'reference_number', 'proof_path', 'paid_at', 'payment_time', 'coverage_start', 'coverage_end', 'notes', 'recorded_by', 'submitted_by', 'reviewed_by', 'reviewed_at', 'rejection_reason', 'proof_request_reason', 'proof_requested_by', 'proof_requested_at', 'proof_unavailable'];
 
     protected function casts(): array
     {
-        return ['paid_at' => 'datetime', 'payment_time' => 'datetime:H:i', 'coverage_start' => 'date', 'coverage_end' => 'date', 'reviewed_at' => 'datetime', 'proof_requested_at' => 'datetime', 'proof_unavailable' => 'boolean'];
+        return ['paid_at' => 'datetime', 'payment_time' => 'datetime:H:i', 'coverage_start' => 'date', 'coverage_end' => 'date', 'reviewed_at' => 'datetime', 'proof_requested_at' => 'datetime', 'proof_unavailable' => 'boolean', 'manual_entry' => 'boolean'];
     }
 
     public function bill(): BelongsTo
@@ -102,6 +107,15 @@ class Payment extends Model
             self::ACTIVATES_SCAN_AND_SMS => 'Scan + SMS',
             self::ACTIVATES_SMS => 'SMS (Scan already active)',
             default => 'Scan only',
+        };
+    }
+
+    public static function methodLabel(?string $method): string
+    {
+        return match ($method) {
+            self::METHOD_CASH => 'Cash',
+            self::METHOD_BANK_TRANSFER => 'Bank transfer',
+            default => 'GCash',
         };
     }
 }

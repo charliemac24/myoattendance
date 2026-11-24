@@ -266,16 +266,16 @@ class SingleActivateButtonTest extends TestCase
     {
         $plan = $data['plan'] ?? null;
         $listPrice = in_array($plan, Bill::ALL_TYPES, true)
-            ? $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan='.$plan.'&months='.($data['months'] ?? 1))->json('bill.total_minor')
+            ? $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments/quote?plan='.$plan.'&months='.($data['months'] ?? 1))->json('bill.total_minor')
             : null;
 
-        return $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments', $data + ['received_at' => '2026-11-10', 'amount' => $listPrice ? number_format($listPrice / 100, 2, '.', '') : '100.00']);
+        return $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments', $data + ['payment_method' => Payment::METHOD_CASH, 'received_at' => '2026-11-10', 'amount' => $listPrice ? number_format($listPrice / 100, 2, '.', '') : '100.00']);
     }
 
     public function test_cash_for_base_is_recorded_approved_and_turns_on_scan_only(): void
     {
         $owner = $this->owner();
-        $quote = $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=base&months=3')->assertOk()
+        $quote = $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments/quote?plan=base&months=3')->assertOk()
             ->assertJsonPath('activates_label', 'Scan only')->assertJsonPath('under_review', false);
 
         $response = $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'months' => 3, 'notes' => 'OR 1234'])->assertCreated()
@@ -317,7 +317,7 @@ class SingleActivateButtonTest extends TestCase
     {
         $owner = $this->owner('active');
         $baseEnds = $owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at;
-        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote')->assertOk()
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments/quote')->assertOk()
             ->assertJsonPath('plan', Bill::TYPE_SMS_NOW);
 
         $this->recordCash($owner, ['plan' => Bill::TYPE_SMS_NOW])->assertCreated()->assertJsonPath('activated', Payment::ACTIVATES_SMS);
@@ -336,7 +336,7 @@ class SingleActivateButtonTest extends TestCase
         $this->submitProof($expired, Bill::TYPE_BASE, 'WAITING');
         $this->recordCash($expired, ['plan' => Bill::TYPE_BASE])->assertStatus(409);
 
-        $this->actingAs($expired)->postJson('/api/super-admin/organizations/'.$expired->organization_id.'/cash-payments', ['plan' => Bill::TYPE_BASE, 'received_at' => '2026-11-10'])->assertForbidden();
+        $this->actingAs($expired)->postJson('/api/super-admin/organizations/'.$expired->organization_id.'/recorded-payments', ['plan' => Bill::TYPE_BASE, 'received_at' => '2026-11-10'])->assertForbidden();
         $this->assertSame(1, Payment::query()->where('organization_id', $expired->organization_id)->count());
     }
 
@@ -369,7 +369,7 @@ class SingleActivateButtonTest extends TestCase
     public function test_cash_base_plus_sms_for_a_new_or_expired_school_turns_sms_on_right_away(): void
     {
         $owner = $this->owner();
-        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=package')->assertOk()
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments/quote?plan=package')->assertOk()
             ->assertJsonPath('sms_can_start_today', false)
             ->assertJsonPath('starts_on', '2026-11-10');
 
@@ -381,7 +381,7 @@ class SingleActivateButtonTest extends TestCase
     public function test_cash_base_plus_sms_while_base_is_running_can_start_sms_today(): void
     {
         $owner = $this->owner('active');
-        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/cash-payments/quote?plan=package')->assertOk()
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id.'/recorded-payments/quote?plan=package')->assertOk()
             ->assertJsonPath('sms_can_start_today', true)
             ->assertJsonPath('starts_on', '2026-12-05');
 
@@ -409,16 +409,72 @@ class SingleActivateButtonTest extends TestCase
         $payment = $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'notes' => 'OR 1'])->assertCreated()->json('payment');
         $expiresBefore = $owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at;
 
-        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '2500.50', 'received_at' => '2026-11-09', 'notes' => 'OR 2'])->assertOk()
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'cash', 'amount' => '2500.50', 'received_at' => '2026-11-09', 'notes' => 'OR 2'])->assertOk()
             ->assertJsonPath('payment.amount_minor', 250050)
             ->assertJsonPath('payment.notes', 'OR 2');
         $this->assertSame('2026-11-09', Payment::findOrFail($payment['id'])->paid_at->toDateString());
         $this->assertTrue($expiresBefore->equalTo($owner->organization->baseSubscription()->firstOrFail()->subscription_expires_at));
 
-        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '0', 'received_at' => '2026-11-09'])->assertStatus(422);
-        $this->actingAs($owner)->putJson('/api/super-admin/cash-payments/'.$payment['id'], ['amount' => '1', 'received_at' => '2026-11-09'])->assertForbidden();
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'cash', 'amount' => '0', 'received_at' => '2026-11-09'])->assertStatus(422);
+        $this->actingAs($owner)->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'cash', 'amount' => '1', 'received_at' => '2026-11-09'])->assertForbidden();
 
         $gcashId = $this->submitProof($this->owner(), Bill::TYPE_BASE, 'NOT-CASH');
-        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/cash-payments/'.$gcashId, ['amount' => '1', 'received_at' => '2026-11-09'])->assertNotFound();
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$gcashId, ['payment_method' => 'cash', 'amount' => '1', 'received_at' => '2026-11-09'])->assertNotFound();
+    }
+
+    public function test_gcash_the_school_only_messaged_about_can_be_recorded_with_its_reference(): void
+    {
+        $owner = $this->owner();
+
+        $response = $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'payment_method' => Payment::METHOD_GCASH, 'reference_number' => '9012345678901'])->assertCreated()
+            ->assertJsonPath('payment.payment_method', Payment::METHOD_GCASH)
+            ->assertJsonPath('payment.reference_number', '9012345678901')
+            ->assertJsonPath('payment.manual_entry', true)
+            ->assertJsonPath('activated', Payment::ACTIVATES_SCAN_AND_SMS);
+
+        $this->assertTrue($this->canScan($owner));
+        $this->assertTrue($this->canSms($owner));
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()
+            ->assertJsonPath('payments.0.payment_method', Payment::METHOD_GCASH)
+            ->assertJsonPath('payments.0.manual_entry', true);
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/dashboard')->assertOk()
+            ->assertJsonPath('recent_payments.0.manual_entry', true);
+        $this->assertSame(Payment::STATUS_APPROVED, Payment::findOrFail($response->json('payment.id'))->status);
+    }
+
+    public function test_bank_transfer_can_be_recorded_without_a_reference_and_unknown_methods_are_refused(): void
+    {
+        $owner = $this->owner();
+        $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'payment_method' => 'paypal'])->assertStatus(422)->assertJsonValidationErrors('payment_method');
+
+        $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'payment_method' => Payment::METHOD_BANK_TRANSFER])->assertCreated()
+            ->assertJsonPath('payment.payment_method', Payment::METHOD_BANK_TRANSFER)
+            ->assertJsonPath('payment.reference_number', null);
+        $this->assertTrue($this->canScan($owner));
+    }
+
+    public function test_a_recorded_reference_already_on_another_payment_is_refused(): void
+    {
+        $this->submitProof($this->owner(), Bill::TYPE_BASE, 'GCASH-DUP');
+        $other = $this->owner();
+
+        $this->recordCash($other, ['plan' => Bill::TYPE_BASE, 'payment_method' => Payment::METHOD_GCASH, 'reference_number' => 'GCASH-DUP'])->assertStatus(422);
+        $this->assertFalse($this->canScan($other));
+    }
+
+    public function test_recorded_payment_method_and_reference_can_be_edited(): void
+    {
+        $owner = $this->owner();
+        $payment = $this->recordCash($owner, ['plan' => Bill::TYPE_BASE])->assertCreated()->json('payment');
+
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'gcash', 'reference_number' => 'GC-777', 'amount' => '2999', 'received_at' => '2026-11-10'])->assertOk()
+            ->assertJsonPath('payment.payment_method', Payment::METHOD_GCASH)
+            ->assertJsonPath('payment.reference_number', 'GC-777')
+            ->assertJsonPath('payment.manual_entry', true);
+        // Editing it again keeps its own reference.
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'bank_transfer', 'reference_number' => 'GC-777', 'amount' => '2999', 'received_at' => '2026-11-10'])->assertOk()
+            ->assertJsonPath('payment.payment_method', Payment::METHOD_BANK_TRANSFER);
+        $this->actingAs($this->superAdmin())->putJson('/api/super-admin/recorded-payments/'.$payment['id'], ['payment_method' => 'card', 'amount' => '2999', 'received_at' => '2026-11-10'])->assertStatus(422);
+        $this->assertTrue($this->canScan($owner));
     }
 }

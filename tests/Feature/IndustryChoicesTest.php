@@ -60,6 +60,41 @@ class IndustryChoicesTest extends TestCase
         $this->assertSame(['person_plural' => 'Clients'], $organization->fresh()->terminology);
     }
 
+    public function test_switching_gym_back_to_school_shows_school_labels_even_if_an_old_page_is_saved(): void
+    {
+        $organization = Organization::create(['name' => 'Back to school', 'type' => 'fitness', 'timezone' => 'Asia/Manila']);
+        $owner = User::create(['organization_id' => $organization->id, 'name' => 'Owner', 'email' => 'owner@back.test', 'password' => 'password', 'email_verified_at' => now(), 'role' => 'owner']);
+        $gymWords = OrganizationTerminology::defaults('fitness');
+
+        $this->actingAs($owner)->putJson('/api/organization/industry', ['type' => 'school'])->assertOk()
+            ->assertJsonPath('terminology.person_plural', 'Students');
+
+        // A Labels page still open from before the switch can't pin the gym words.
+        $this->actingAs($owner)->putJson('/api/organization/terminology', $gymWords + ['type' => 'fitness', 'edited' => []])->assertStatus(409);
+        // Boxes that still hold old words but weren't typed into are not saved.
+        $this->actingAs($owner)->putJson('/api/organization/terminology', $gymWords + ['type' => 'school', 'edited' => []])->assertOk();
+        $this->assertNull($organization->fresh()->terminology);
+        $this->actingAs($owner)->get('/people')->assertOk()->assertSee('Students')->assertDontSee('Members');
+        $this->actingAs($owner)->get('/settings/terminology')->assertOk()->assertSee('value="Students"', false)->assertSee('value="Grade Levels"', false)->assertSee('value="Sections"', false);
+
+        // A label the owner really typed is kept; the rest stay the school words.
+        $this->actingAs($owner)->putJson('/api/organization/terminology', $gymWords + ['type' => 'school', 'edited' => ['subgroup_singular', 'subgroup_plural']])->assertOk()
+            ->assertJsonPath('terminology.person_plural', 'Students')
+            ->assertJsonPath('terminology.subgroup_plural', 'Classes');
+        $this->assertSame(['subgroup_singular' => 'Class', 'subgroup_plural' => 'Classes'], $organization->fresh()->terminology);
+    }
+
+    public function test_labels_left_over_from_another_industry_are_cleared(): void
+    {
+        $stale = Organization::create(['name' => 'Stale', 'type' => 'school', 'timezone' => 'Asia/Manila', 'terminology' => OrganizationTerminology::defaults('fitness')]);
+        $custom = Organization::create(['name' => 'Custom', 'type' => 'school', 'timezone' => 'Asia/Manila', 'terminology' => ['subgroup_singular' => 'Class', 'subgroup_plural' => 'Classes']]);
+
+        (require database_path('migrations/2026_11_24_000002_clear_labels_left_over_from_another_industry.php'))->up();
+
+        $this->assertNull($stale->fresh()->terminology);
+        $this->assertSame(['subgroup_singular' => 'Class', 'subgroup_plural' => 'Classes'], $custom->fresh()->terminology);
+    }
+
     public function test_add_plan_and_add_class_pages_show_gym_examples_for_a_gym_and_school_examples_otherwise(): void
     {
         foreach (['fitness' => ['Monthly Unlimited', 'Morning Yoga'], 'school' => ['Grade 9', 'Section A']] as $type => [$groupExample, $subgroupExample]) {

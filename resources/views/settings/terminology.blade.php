@@ -102,9 +102,13 @@
                     successBox.classList.remove('visible');
                 }
 
+                // What each box held when the page opened (or after the last save), so only the labels typed into get saved.
+                let saved = {};
                 function applyTerminology(terminology) {
                     Object.entries(fields).forEach(([key, input]) => { input.value = terminology[key]; });
+                    saved = { ...terminology };
                 }
+                Object.entries(fields).forEach(([key, input]) => { saved[key] = input.value; });
 
                 form.addEventListener('submit', async (event) => {
                     event.preventDefault();
@@ -114,6 +118,8 @@
 
                     const payload = {};
                     Object.entries(fields).forEach(([key, input]) => { payload[key] = input.value; });
+                    payload.edited = Object.keys(fields).filter((key) => fields[key].value.trim() !== String(saved[key] ?? '').trim());
+                    payload.type = currentIndustry;
 
                     try {
                         const result = await window.MyoAuth.submitJson('/api/organization/terminology', payload, 'PUT');

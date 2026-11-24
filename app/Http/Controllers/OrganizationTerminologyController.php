@@ -22,8 +22,21 @@ class OrganizationTerminologyController extends Controller
             'group_singular' => ['required', 'string', 'max:40'], 'group_plural' => ['required', 'string', 'max:40'],
             'subgroup_singular' => ['required', 'string', 'max:40'], 'subgroup_plural' => ['required', 'string', 'max:40'],
         ]);
+        $page = $request->validate([
+            // The industry the Labels page was showing, and which labels the person actually typed into.
+            'type' => ['nullable', 'string'],
+            'edited' => ['nullable', 'array'],
+            'edited.*' => ['string', Rule::in(array_keys($data))],
+        ]);
         $data = array_map(static fn (string $value): string => trim($value), $data);
         $organization = $request->user()->organization;
+        // A page opened before an industry switch still holds the old industry's words; saving it would pin them.
+        if (isset($page['type']) && $page['type'] !== $organization->type) {
+            return response()->json(['message' => 'The industry was changed since this page opened. Reload the page and try again.'], 409);
+        }
+        if (array_key_exists('edited', $page)) {
+            $data = array_replace(OrganizationTerminology::forOrganization($organization), array_intersect_key($data, array_flip($page['edited'] ?? [])));
+        }
         // Keep only the labels that differ from the industry's own words, so the rest follow the industry when it changes.
         $custom = array_diff_assoc($data, OrganizationTerminology::defaults($organization->type));
         $organization->update(['terminology' => $custom === [] ? null : $custom]);

@@ -215,6 +215,12 @@
             </div>
         </template>
 
+        <script>
+            window.MyoBilling = {
+                organizationType: @json($user->organization?->type),
+                terminology: @json($user->organization ? \App\Support\OrganizationTerminology::forOrganization($user->organization) : null),
+            };
+        </script>
         @vite(['resources/js/billing.js'])
     </x-slot:scripts>
 </x-layouts.app>

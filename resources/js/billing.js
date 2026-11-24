@@ -1,5 +1,14 @@
 import { get, post, upload } from './services/api';
 
+// The organization's own word for the people it tracks (Students, Members, Employees…), from the Labels page.
+const billingConfig = window.MyoBilling || {};
+const peopleHint = () => {
+    const plural = billingConfig.terminology?.person_plural;
+    return plural && plural !== 'People' ? `Usually your number of ${plural.toLowerCase()}.` : 'Usually everyone you record attendance for.';
+};
+// Gyms are usually open every day; everyone else starts on weekdays. The owner can change it.
+const defaultSmsDays = () => (billingConfig.organizationType === 'fitness' ? 'every_day' : 'weekdays');
+
 const els = {
     loading: document.getElementById('billing-loading'),
     content: document.getElementById('billing-content'),
@@ -372,13 +381,13 @@ function renderSmsEstimate(billing, sms) {
     const settings = estimate.settings;
     if (!settings) return;
     const texts = estimate.texts?.length ? estimate.texts : ['time_in', 'time_out'];
-    const days = estimate.days || 'weekdays';
+    const days = estimate.days || defaultSmsDays();
     box.innerHTML = `
         <p class="billing-renewal-choice-title">Get your SMS price</p>
         <p class="billing-renewal-choice-status">SMS texts a person's contact number when their Time In, Late, or Time Out is recorded. Tell us how you'll use it and we'll show your monthly price right away.</p>
         <label class="billing-estimate-field">How many people will receive SMS?
             <input type="number" min="1" max="100000" data-estimate="people" placeholder="e.g. 350">
-            <span class="billing-estimate-hint">Usually your number of students or employees.</span>
+            <span class="billing-estimate-hint">${peopleHint()}</span>
         </label>
         <div class="billing-estimate-group"><span class="billing-renewal-choice-title">Which texts?</span>
             <label><input type="checkbox" data-estimate="text" value="time_in"> Time In</label>
@@ -536,7 +545,7 @@ function customPriceForm(onCancel) {
         <p class="billing-renewal-choice-status">Tell us how you'll use SMS so we can work out your price.</p>
         <label class="billing-estimate-field">How many people will receive SMS?
             <input type="number" min="1" max="100000" required data-custom="people" placeholder="e.g. 350">
-            <span class="billing-estimate-hint">Usually your number of students or employees.</span>
+            <span class="billing-estimate-hint">${peopleHint()}</span>
         </label>
         <div class="billing-estimate-group"><span class="billing-renewal-choice-title">Which texts?</span>
             <label><input type="checkbox" data-custom="text" value="time_in"> Time In</label>
@@ -555,7 +564,7 @@ function customPriceForm(onCancel) {
         </div>`;
     form.querySelector('[data-custom="people"]').value = saved.people || '';
     form.querySelectorAll('[data-custom="text"]').forEach((input) => { input.checked = texts.includes(input.value); });
-    form.querySelectorAll('[data-custom="days"]').forEach((input) => { input.checked = input.value === (saved.days || 'weekdays'); });
+    form.querySelectorAll('[data-custom="days"]').forEach((input) => { input.checked = input.value === (saved.days || defaultSmsDays()); });
     const status = form.querySelector('[data-custom="status"]');
     form.querySelector('[data-custom="cancel"]').addEventListener('click', () => { form.remove(); onCancel(); });
     form.addEventListener('submit', (event) => {

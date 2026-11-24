@@ -105,4 +105,21 @@ class SmsCustomPriceRequestTest extends TestCase
             ->assertJsonPath('organization.sms_estimate.days', 'mon_sat')
             ->assertJsonPath('organization.sms_estimate.amount_minor', 910000);
     }
+
+    public function test_a_gym_asks_for_its_price_with_its_own_wording_and_super_admin_sees_the_answers(): void
+    {
+        $gym = Organization::create(['name' => 'Iron Gym', 'type' => 'fitness', 'timezone' => 'Asia/Manila']);
+        BaseSubscription::create(['organization_id' => $gym->id, 'trial_ends_at' => now()->subDay(), 'status' => 'expired']);
+        $owner = User::factory()->create(['organization_id' => $gym->id, 'role' => 'owner']);
+        $admin = User::factory()->create(['organization_id' => null, 'role' => User::ROLE_SUPER_ADMIN]);
+
+        $this->actingAs($owner)->get('/billing')->assertOk()
+            ->assertSee('organizationType: "fitness"', false)
+            ->assertSee('"person_plural":"Members"', false);
+
+        $this->actingAs($owner)->postJson('/api/organization/sms/access/request', ['people' => 200, 'texts' => ['time_in'], 'days' => 'every_day'])->assertCreated();
+        $this->actingAs($admin)->getJson('/api/super-admin/organizations/'.$gym->id)->assertOk()
+            ->assertJsonPath('organization.sms_estimate.people', 200)
+            ->assertJsonPath('organization.sms_estimate.days', 'every_day');
+    }
 }

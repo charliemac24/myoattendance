@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Storage;
  * - demo-noprice / password: expired school with no SMS price at all; Billing offers Base only plus "Get your SMS price"
  * - demo-request / password: Base paid, asked for a custom SMS price; super admin sets the price and sends payment instructions
  * - demo-priced / password: Base paid, SMS price set by super admin, so Billing shows Base + SMS and Add SMS
+ * - demo-gym / password: expired Fitness / Gym with no SMS price, to test "Request a custom SMS price" with gym wording
  *
  * The app has no default SMS price. The demo schools that need one get DEMO_SMS_PRICE_MINOR here, as demo data only.
  */
@@ -60,15 +61,16 @@ class ActivationDemoSeeder extends Seeder
             ['demo-noprice', 'Activation Demo – No SMS price', null],
             ['demo-request', 'Activation Demo – Custom SMS price requested', null],
             ['demo-priced', 'Activation Demo – SMS price set', null],
+            ['demo-gym', 'Activation Demo – Gym, no SMS price', null],
         ] as [$username, $name, $paidPlan]) {
-            $school = $this->resetExpiredSchool($name);
+            $school = $this->resetExpiredSchool($name, $username === 'demo-gym' ? 'fitness' : 'school');
             $owner = $this->owner($school, $username);
             if (in_array($username, ['demo-addsms', 'demo-request', 'demo-priced'], true)) {
                 $this->paidBaseMonth($school, $owner, $admin, now()->subDays(3));
             }
             if ($username === 'demo-request') {
                 $requests->request($school, $owner, null, ['people' => 350, 'texts' => ['time_in', 'time_out'], 'days' => 'weekdays']);
-            } elseif ($username !== 'demo-noprice') {
+            } elseif (! in_array($username, ['demo-noprice', 'demo-gym'], true)) {
                 $pricing->setPrice($school, $admin, self::DEMO_SMS_PRICE_MINOR, now()->subMonth()->toDateString(), 'Demo SMS price (demo data)');
             }
 
@@ -81,9 +83,9 @@ class ActivationDemoSeeder extends Seeder
     /**
      * Wipes billing for this demo school only and leaves it with a free trial that ended yesterday.
      */
-    private function resetExpiredSchool(string $name): Organization
+    private function resetExpiredSchool(string $name, string $type = 'school'): Organization
     {
-        $school = Organization::query()->firstOrCreate(['name' => $name], ['type' => 'school', 'timezone' => 'Asia/Manila']);
+        $school = Organization::query()->firstOrCreate(['name' => $name], ['type' => $type, 'timezone' => 'Asia/Manila']);
         $school->update(['sms_estimate_people' => null, 'sms_estimate_texts' => null, 'sms_estimate_days' => null]);
 
         $school->payments()->each(function (Payment $payment): void {

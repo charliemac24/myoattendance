@@ -316,6 +316,7 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('api/super-admin'
     Route::post('/organizations/{organization}/sms/enable', [SuperAdminEntitlementController::class, 'enable'])->name('sms.enable');
     Route::post('/organizations/{organization}/sms/extend', [SuperAdminEntitlementController::class, 'extend'])->name('sms.extend');
     Route::post('/organizations/{organization}/sms/disable', [SuperAdminEntitlementController::class, 'disable'])->name('sms.disable');
+    Route::post('/organizations/{organization}/sms/resume', [SuperAdminEntitlementController::class, 'resume'])->name('sms.resume');
     Route::get('/sms-requests', [SuperAdminSmsRequestController::class, 'index'])->name('sms-requests.index');
     Route::get('/sms-requests/{featureRequest}', [SuperAdminSmsRequestController::class, 'show'])->name('sms-requests.show');
     Route::put('/sms-requests/{featureRequest}/pricing', [SuperAdminSmsRequestController::class, 'setPricing'])->name('sms-requests.pricing');

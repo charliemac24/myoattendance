@@ -222,4 +222,43 @@ class SingleActivateButtonTest extends TestCase
         $this->assertSame([$thirdId, $secondId, $firstId], array_slice(array_column($this->actingAs($this->superAdmin())->getJson('/api/super-admin/dashboard')->assertOk()->json('recent_payments'), 'id'), 0, 3));
         $this->assertSame([$thirdId, $secondId, $firstId], array_column($this->actingAs($this->superAdmin())->getJson('/api/super-admin/billing/payments')->assertOk()->json('data'), 'id'));
     }
+
+    public function test_sms_turned_off_by_admin_can_be_turned_back_on_until_the_paid_end_date(): void
+    {
+        $owner = $this->owner();
+        $admin = $this->superAdmin();
+        $this->activate($this->submitProof($owner, Bill::TYPE_PACKAGE, 'RESUME'))->assertOk();
+        $paidUntil = $owner->organization->featureEntitlements()->firstOrFail()->expires_at->toDateString();
+        $organizationUrl = '/api/super-admin/organizations/'.$owner->organization_id;
+
+        $this->actingAs($admin)->postJson($organizationUrl.'/sms/disable')->assertOk();
+        $this->assertFalse($this->canSms($owner));
+        $this->actingAs($admin)->getJson($organizationUrl)->assertOk()
+            ->assertJsonPath('organization.sms_access_status', 'disabled')
+            ->assertJsonPath('organization.sms_resumable_until', $paidUntil);
+
+        $this->actingAs($owner)->postJson($organizationUrl.'/sms/resume')->assertForbidden();
+        $this->actingAs($admin)->postJson($organizationUrl.'/sms/resume')->assertOk();
+
+        $this->assertTrue($this->canSms($owner));
+        $this->assertSame($paidUntil, $owner->organization->featureEntitlements()->firstOrFail()->expires_at->toDateString());
+        $this->actingAs($admin)->getJson($organizationUrl)->assertOk()
+            ->assertJsonPath('organization.sms_access_status', 'active')
+            ->assertJsonPath('organization.sms_resumable_until', null);
+    }
+
+    public function test_sms_cannot_be_turned_back_on_without_paid_sms_time_left(): void
+    {
+        $neverPaid = $this->owner();
+        $this->actingAs($this->superAdmin())->postJson('/api/super-admin/organizations/'.$neverPaid->organization_id.'/sms/resume')->assertStatus(409);
+
+        $owner = $this->owner();
+        $admin = $this->superAdmin();
+        $this->activate($this->submitProof($owner, Bill::TYPE_PACKAGE, 'RESUME-LATE'))->assertOk();
+        $this->actingAs($admin)->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms/disable')->assertOk();
+        $this->travel(2)->months();
+
+        $this->actingAs($admin)->postJson('/api/super-admin/organizations/'.$owner->organization_id.'/sms/resume')->assertStatus(409);
+        $this->assertFalse($this->canSms($owner));
+    }
 }

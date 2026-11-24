@@ -62,6 +62,31 @@ class FeatureEntitlementService
         ));
     }
 
+    /**
+     * The last day of SMS the organization already paid for, while SMS is turned off by an admin and that day has not passed.
+     */
+    public function resumableSmsUntil(Organization $organization): ?Carbon
+    {
+        $entitlement = $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->first();
+
+        return $entitlement && ! $entitlement->enabled && $entitlement->expires_at && $entitlement->expires_at->toDateString() >= now()->toDateString()
+            ? Carbon::parse($entitlement->expires_at)
+            : null;
+    }
+
+    /**
+     * Turns SMS back on after an admin turned it off, until the end date already paid for. No new payment.
+     */
+    public function resumeSms(Organization $organization, User $actor): FeatureEntitlement
+    {
+        abort_unless($this->resumableSmsUntil($organization), 409, 'There is no paid SMS time left to turn back on. Ask the school to pay for SMS, then press Activate on that payment.');
+
+        return DB::transaction(fn () => tap(
+            $organization->featureEntitlements()->where('feature', FeatureEntitlement::SMS)->lockForUpdate()->firstOrFail(),
+            fn (FeatureEntitlement $entitlement) => $entitlement->update(['enabled' => true, 'enabled_by' => $actor->id, 'disabled_at' => null, 'disabled_by' => null]),
+        ));
+    }
+
     public function extendSms(Organization $organization, User $actor, string $expiresAt): FeatureEntitlement
     {
         return DB::transaction(fn () => tap(

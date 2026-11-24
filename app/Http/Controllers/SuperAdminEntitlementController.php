@@ -36,6 +36,11 @@ class SuperAdminEntitlementController extends Controller
         return response()->json(['entitlement' => $service->extendSms($organization, $request->user(), $data['expires_at'])]);
     }
 
+    public function resume(Request $request, Organization $organization, FeatureEntitlementService $service): JsonResponse
+    {
+        return response()->json(['entitlement' => $service->resumeSms($organization, $request->user())]);
+    }
+
     public function disable(Request $request, Organization $organization, FeatureEntitlementService $service): JsonResponse
     {
         return response()->json(['entitlement' => $service->disableSms($organization, $request->user())]);

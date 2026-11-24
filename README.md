@@ -1,6 +1,6 @@
-# MYO Attendance V2 — Core V1
+# MYO Attendance — Core V1
 
-MYO Attendance V2 is a same-origin Laravel application with a React/Vite presentation layer for tenant-scoped attendance management.
+MYO Attendance is a same-origin Laravel application with a React/Vite presentation layer for tenant-scoped attendance management.
 
 ## Core V1 includes
 

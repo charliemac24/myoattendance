@@ -1,4 +1,4 @@
-# MYO Attendance V2 — Core V1 Architecture
+# MYO Attendance — Core V1 Architecture
 
 This is one Laravel application. Laravel owns the database, validation, tenant boundaries, authentication, attendance/schedule/QR business rules, and reporting. React is a Vite-mounted SPA-style presentation layer.
 

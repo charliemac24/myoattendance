@@ -24,7 +24,7 @@ Paste the block below into Codex from the root of the MYOattendanceV2 repo, afte
 ## Prompt
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
 
 GOAL
 End-to-end test of the SPORTS ACADEMY organization type, used the way a gym or sports club runs its front desk: sign-up, sports and teams, members with membership end dates, check-in at any time, renewals, lost cards, members who stop coming, and the owner's monthly exports. Include one scheduled training squad to show where scheduled mode fits and where it does not. Focus on workflows and features; reuse existing helpers.

@@ -101,7 +101,7 @@ Paste the block below into Codex from the root of the MYOattendanceV2 repo. It t
 ## Prompt
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>` (NEVER inside Docker: Docker's env would point RefreshDatabase at the real MySQL and wipe it). Format PHP with `vendor/bin/pint --dirty --format agent`.
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>` (NEVER inside Docker: Docker's env would point RefreshDatabase at the real MySQL and wipe it). Format PHP with `vendor/bin/pint --dirty --format agent`.
 
 GOAL
 Test steps 1–4 end to end: staff roles and industry presets; open hours and membership dates; employee hours, night shifts and the Timesheet; and past records staying the same after moves, schedule edits and archiving. DO NOT change application code (app/, resources/, routes/, database/migrations). Only add tests and report what you find. If a test shows a bug, leave the failing test in place, mark it clearly, and report it; do not fix the app.

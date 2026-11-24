@@ -33,7 +33,7 @@ Paste the block below into Codex from the root of the MYOattendanceV2 repo. Run 
 ## Prompt
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
 
 GOAL
 End-to-end test of the SCHOOL / EDUCATION organization type, as the paying school uses it day to day: sign-up, setup, enrolling students, daily scanning at the gate, reports for teachers and the principal, and the changes a school makes during the year (moving sections, lost ID cards, students leaving). Focus on workflows and features, with a strong regression focus: past records must never change.

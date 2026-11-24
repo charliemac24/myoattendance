@@ -30,7 +30,7 @@ Paste the block below into Codex from the root of the MYOattendanceV2 repo, afte
 ## Prompt
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance). Tests use PHPUnit with SQLite in memory: run them ON THE HOST with `php artisan test --compact <path or --filter>`. NEVER run php artisan test inside Docker: Docker's env points RefreshDatabase at the real MySQL and wipes it. Format PHP with `vendor/bin/pint --dirty --format agent`.
 
 GOAL
 End-to-end test of the COMPANY organization type, the way an HR officer and a guard use it: sign-up, departments and shifts, enrolling employees, the guard kiosk, a full payroll cut-off (Nov 1–15, 2026) with day and night shifts, lunch breaks, overtime, rest days and holidays, then the Timesheet and its CSVs for payroll. Then the changes an HR officer makes mid-cut-off. Focus on workflows and features; reuse existing helpers.

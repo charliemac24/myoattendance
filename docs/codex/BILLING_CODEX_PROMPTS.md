@@ -9,7 +9,7 @@ Many of these cases are already covered in `tests/Feature/BillingPackagesTest.ph
 ## 0. Shared context (paste first in any new Codex session)
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2) with a Blade + vanilla JS billing page (resources/js/billing.js) and a React super-admin page (resources/js/pages/SuperAdminPage.js). Tests use PHPUnit with SQLite in memory: run them with `php artisan test --compact <path or --filter>`. Format PHP with `vendor/bin/pint --dirty --format agent`.
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance) with a Blade + vanilla JS billing page (resources/js/billing.js) and a React super-admin page (resources/js/pages/SuperAdminPage.js). Tests use PHPUnit with SQLite in memory: run them with `php artisan test --compact <path or --filter>`. Format PHP with `vendor/bin/pint --dirty --format agent`.
 
 Billing rules (source of truth: docs/BILLING_AND_SUBSCRIPTIONS.md):
 - There are exactly two plans: Base (bill_type `base`) and Base + SMS (bill_type `package`). There is no SMS-only plan; GET /api/billing?type=sms must be a validation error.

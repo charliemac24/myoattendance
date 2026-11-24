@@ -20,7 +20,7 @@ Paste the block below into Codex from the root of the MYOattendanceV2 repo. It t
 ## Prompt
 
 ```
-You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance V2). Tests use PHPUnit with SQLite in memory: run them with `php artisan test --compact <path or --filter>`. Format PHP with `vendor/bin/pint --dirty --format agent`. Run tests on the host (not inside Docker).
+You are working in a Laravel 12 / PHP 8.4 app (MYO Attendance). Tests use PHPUnit with SQLite in memory: run them with `php artisan test --compact <path or --filter>`. Format PHP with `vendor/bin/pint --dirty --format agent`. Run tests on the host (not inside Docker).
 
 GOAL
 Prove that a trial school's start choice ("After my free trial ends" = after_trial, "Right away" = immediate) is reflected everywhere and that Super Admin approval does exactly what was chosen. DO NOT change application code (app/, resources/, routes/, database/migrations). Only add tests and report what you find.

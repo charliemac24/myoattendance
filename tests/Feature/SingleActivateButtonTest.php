@@ -442,15 +442,27 @@ class SingleActivateButtonTest extends TestCase
         $this->assertSame(Payment::STATUS_APPROVED, Payment::findOrFail($response->json('payment.id'))->status);
     }
 
-    public function test_bank_transfer_can_be_recorded_without_a_reference_and_unknown_methods_are_refused(): void
+    public function test_bank_transfer_base_plus_sms_can_be_recorded_without_a_reference_and_turns_sms_on(): void
     {
         $owner = $this->owner();
         $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'payment_method' => 'paypal'])->assertStatus(422)->assertJsonValidationErrors('payment_method');
 
-        $this->recordCash($owner, ['plan' => Bill::TYPE_BASE, 'payment_method' => Payment::METHOD_BANK_TRANSFER])->assertCreated()
+        $this->recordCash($owner, ['plan' => Bill::TYPE_PACKAGE, 'payment_method' => Payment::METHOD_BANK_TRANSFER])->assertCreated()
             ->assertJsonPath('payment.payment_method', Payment::METHOD_BANK_TRANSFER)
-            ->assertJsonPath('payment.reference_number', null);
+            ->assertJsonPath('payment.reference_number', null)
+            ->assertJsonPath('activated', Payment::ACTIVATES_SCAN_AND_SMS);
         $this->assertTrue($this->canScan($owner));
+        $this->assertTrue($this->canSms($owner));
+
+        // The school's Billing page lists it as a paid bank transfer, and super admin's Payment history shows it too.
+        $this->actingAs($owner)->getJson('/api/billing')->assertOk()
+            ->assertJsonPath('payments.0.payment_method', Payment::METHOD_BANK_TRANSFER)
+            ->assertJsonPath('payments.0.status', Payment::STATUS_APPROVED)
+            ->assertJsonPath('payments.0.manual_entry', true)
+            ->assertJsonPath('payments.0.bill.bill_type', Bill::TYPE_PACKAGE);
+        $this->actingAs($this->superAdmin())->getJson('/api/super-admin/organizations/'.$owner->organization_id)->assertOk()
+            ->assertJsonPath('organization.payments.0.payment_method', Payment::METHOD_BANK_TRANSFER)
+            ->assertJsonPath('organization.payments.0.manual_entry', true);
     }
 
     public function test_a_recorded_reference_already_on_another_payment_is_refused(): void

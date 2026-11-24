@@ -60,14 +60,15 @@
                 <div class="billing-sms-request" id="billing-sms-request" hidden></div>
                 <div class="billing-sms-now" id="billing-sms-now" hidden>
                     <p class="billing-renewal-choice-title" id="billing-sms-now-title"></p>
-                    <p class="billing-renewal-choice-status" id="billing-sms-now-text"></p>
                     <button type="button" class="billing-renewal-choice-btn" id="billing-sms-now-btn" data-sms-now>
                         <span class="billing-renewal-choice-text">
                             <span class="billing-renewal-choice-btn-title" id="billing-sms-now-btn-title">Add SMS</span>
                             <span class="billing-renewal-choice-btn-caption" id="billing-sms-now-btn-caption"></span>
                         </span>
+                        <span class="billing-sms-now-action" id="billing-sms-now-action" aria-hidden="true">Select</span>
                         <span class="billing-renewal-choice-check" aria-hidden="true">✓</span>
                     </button>
+                    <p class="billing-renewal-choice-status" id="billing-sms-now-text"></p>
                 </div>
                 <p class="billing-renewal-choice-title" id="billing-months-title">How many months?</p>
                 <div class="billing-renewal-choice-buttons billing-months-buttons" id="billing-months-buttons">

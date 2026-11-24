@@ -509,6 +509,8 @@ function renderSmsNow(billing) {
     const selected = selectedType === 'sms_now';
     els.smsNowBtn.classList.toggle('is-selected', selected);
     els.smsNowBtn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    const action = document.getElementById('billing-sms-now-action');
+    if (action) action.textContent = selected ? '✓ Selected' : 'Select';
 }
 
 const ACTIVATION_TEXT = {

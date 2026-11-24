@@ -919,19 +919,25 @@
 /* What this payment does. */
 #billing-change-summary { font-weight: 600; line-height: 1.45; }
 
-/* SMS request and Start SMS now: plain text with a link-style action, no boxes. */
-.billing-sms-request,
-.billing-sms-now { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 4px; }
+/* SMS request: plain text with a link-style action, no boxes. */
+.billing-sms-request { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 4px; }
 .billing-sms-request[hidden],
 .billing-sms-now[hidden] { display: none; }
 .billing-sms-request .billing-renewal-choice-btn,
-.billing-sms-now .billing-renewal-choice-btn,
 .billing-sms-request .billing-sms-choice-btn { width: auto; padding: 2px 0; border: 0; background: none; color: #2563eb; }
-.billing-sms-request .billing-renewal-choice-btn:hover,
-.billing-sms-now .billing-renewal-choice-btn:hover { background: none; text-decoration: underline; }
-.billing-sms-now .billing-renewal-choice-check { display: none; }
-.billing-sms-now .billing-renewal-choice-btn-title { color: #2563eb; }
-.billing-sms-now .billing-renewal-choice-btn.is-selected .billing-renewal-choice-btn-title::after { content: ' ✓ selected'; color: #15803d; }
+.billing-sms-request .billing-renewal-choice-btn:hover { background: none; text-decoration: underline; }
+
+/* Add SMS: a selectable option card, picked like a plan; the explanation sits under it. */
+.billing-sms-now { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 2px; }
+.billing-sms-now .billing-renewal-choice-btn { padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; text-decoration: none; transition: border-color .15s, background .15s; }
+.billing-sms-now .billing-renewal-choice-btn:hover { border-color: #2563eb; background: #f8fbff; text-decoration: none; }
+.billing-sms-now .billing-renewal-choice-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.billing-sms-now .billing-renewal-choice-btn.is-selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 1px #2563eb; }
+.billing-sms-now .billing-renewal-choice-btn-title { color: #0f172a; font-size: 14px; }
+.billing-sms-now .billing-renewal-choice-btn-caption,
+.billing-sms-now .billing-renewal-choice-btn-title { text-decoration: none; }
+.billing-sms-now .billing-sms-now-action { margin-left: auto; padding: 6px 12px; border-radius: 8px; background: #2563eb; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.billing-sms-now .billing-renewal-choice-btn.is-selected .billing-sms-now-action { background: #15803d; }
 .billing-sms-request .billing-sms-choice { display: flex; flex-direction: column; gap: 2px; }
 .billing-sms-request .billing-sms-timing .billing-renewal-choice-btn { width: 100%; padding: 9px 2px; color: #0f172a; border-bottom: 1px solid #e2e8f0; }
 .billing-sms-request .billing-sms-timing .billing-renewal-choice-btn:hover { background: #f8fafc; text-decoration: none; }
